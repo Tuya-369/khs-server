@@ -1,0 +1,137 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  ADMIN
+  DRIVER
+  TOKEN_MANAGER
+  EMPLOYEE
+}
+
+enum RequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum OrderStatus {
+  NEW
+  CONFIRMED
+  CANCELLED
+}
+
+model User {
+  id            String         @id @default(uuid())
+  sapId         String         @unique
+  firstName     String
+  lastName      String
+  phoneNumber   String
+  passwordHash  String
+  role          Role           @default(EMPLOYEE)
+  isActive      Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  vehicles      Vehicle[]
+  requests      RepairRequest[]
+  orders        MerchOrder[]
+  refreshTokens RefreshToken[]
+  notifications Notification[]
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+model Vehicle {
+  id               String          @id @default(uuid())
+  name             String
+  plate            String          @unique
+  assignedDriverId String?
+  driver           User?           @relation(fields: [assignedDriverId], references: [id], onDelete: SetNull)
+  parts            Part[]
+  requests         RepairRequest[]
+}
+
+model Part {
+  id        String          @id @default(uuid())
+  name      String
+  vehicleId String?
+  vehicle   Vehicle?        @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  isGlobal  Boolean         @default(false)
+  requests  RepairRequest[]
+}
+
+model RepairRequest {
+  id            String         @id @default(uuid())
+  driverId      String
+  driver        User           @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  vehicleId     String
+  vehicle       Vehicle        @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  partId        String?
+  part          Part?          @relation(fields: [partId], references: [id], onDelete: SetNull)
+  description   String
+  status        RequestStatus  @default(PENDING)
+  isReadByAdmin Boolean        @default(false)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  images        RequestImage[]
+}
+
+model RequestImage {
+  id        String        @id @default(uuid())
+  requestId String
+  request   RepairRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  url       String
+}
+
+model MerchItem {
+  id              String       @id @default(uuid())
+  title           String
+  description     String
+  longDescription String
+  price           Float
+  stock           Int
+  sizes           String[]
+  colors          String[]
+  imageUrl        String
+  isActive        Boolean      @default(true)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  orders          MerchOrder[]
+}
+
+model MerchOrder {
+  id               String      @id @default(uuid())
+  userId           String
+  user             User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  merchItemId      String
+  merchItem        MerchItem   @relation(fields: [merchItemId], references: [id], onDelete: Cascade)
+  size             String
+  color            String
+  qty              Int
+  status           OrderStatus @default(NEW)
+  isReadByManager  Boolean     @default(false)
+  orderedAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  message   String
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+}

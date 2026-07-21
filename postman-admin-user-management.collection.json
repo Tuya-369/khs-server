@@ -1,0 +1,146 @@
+{
+  "info": {
+    "name": "KHS Admin User Management",
+    "description": "Login as admin and create users with roles using protected endpoint.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5000"
+    },
+    {
+      "key": "adminSapId",
+      "value": "SAP001"
+    },
+    {
+      "key": "adminPassword",
+      "value": "password123"
+    },
+    {
+      "key": "authToken",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "1) Admin Login",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"sapId\": \"{{adminSapId}}\",\n  \"password\": \"{{adminPassword}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/auth/login",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "auth", "login"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status is 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "",
+              "const json = pm.response.json();",
+              "const token = json?.data?.accessToken;",
+              "pm.test('Access token exists', function () {",
+              "  pm.expect(token).to.be.a('string').and.not.empty;",
+              "});",
+              "",
+              "if (token) {",
+              "  pm.collectionVariables.set('authToken', token);",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "2) Create DRIVER",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{authToken}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"sapId\": \"SAP90010\",\n  \"firstName\": \"Driver\",\n  \"lastName\": \"User\",\n  \"phoneNumber\": \"99110010\",\n  \"password\": \"password123\",\n  \"role\": \"DRIVER\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/auth/admin/create-user",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "auth", "admin", "create-user"]
+        }
+      }
+    },
+    {
+      "name": "3) Create TOKEN_MANAGER",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{authToken}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"sapId\": \"SAP90011\",\n  \"firstName\": \"Token\",\n  \"lastName\": \"Manager\",\n  \"phoneNumber\": \"99110011\",\n  \"password\": \"password123\",\n  \"role\": \"TOKEN_MANAGER\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/auth/admin/create-user",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "auth", "admin", "create-user"]
+        }
+      }
+    },
+    {
+      "name": "4) Create ADMIN",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{authToken}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"sapId\": \"SAP90012\",\n  \"firstName\": \"Second\",\n  \"lastName\": \"Admin\",\n  \"phoneNumber\": \"99110012\",\n  \"password\": \"password123\",\n  \"role\": \"ADMIN\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/auth/admin/create-user",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "auth", "admin", "create-user"]
+        }
+      }
+    }
+  ]
+}

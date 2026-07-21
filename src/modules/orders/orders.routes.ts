@@ -1,0 +1,96 @@
+import { Router } from "express";
+import { OrdersService } from "./orders.service";
+import { authenticate } from "../../middlewares/auth.middleware";
+import { authorize } from "../../middlewares/role.middleware";
+import { validate } from "../../middlewares/validate.middleware";
+import {
+  createOrderSchema,
+  managerOrdersQuerySchema,
+  orderIdParamSchema,
+} from "./orders.validation";
+
+const router = Router();
+const service = new OrdersService();
+
+router.post(
+  "/",
+  authenticate,
+  authorize("EMPLOYEE", "DRIVER", "ADMIN", "TOKEN_MANAGER"),
+  validate(createOrderSchema),
+  async (req, res, next) => {
+    try {
+      res.status(201).json({
+        success: true,
+        data: await service.createOrder(req.user!.userId, req.body),
+      });
+    } catch (e) {
+      next(e);
+    }
+  },
+);
+
+router.get(
+  "/my",
+  authenticate,
+  authorize("EMPLOYEE", "DRIVER"),
+  async (req, res, next) => {
+    try {
+      res.json({
+        success: true,
+        data: await service.getMyOrders(req.user!.userId),
+      });
+    } catch (e) {
+      next(e);
+    }
+  },
+);
+
+router.get(
+  "/",
+  authenticate,
+  authorize("TOKEN_MANAGER"),
+  validate(managerOrdersQuerySchema),
+  async (req, res, next) => {
+    try {
+      res.json({
+        success: true,
+        data: await service.getManagerOrders(req.query.filter as string),
+      });
+    } catch (e) {
+      next(e);
+    }
+  },
+);
+
+router.patch(
+  "/:id/confirm",
+  authenticate,
+  authorize("TOKEN_MANAGER"),
+  validate(orderIdParamSchema),
+  async (req, res, next) => {
+    try {
+      res.json({
+        success: true,
+        data: await service.confirmOrder(req.params.id),
+      });
+    } catch (e) {
+      next(e);
+    }
+  },
+);
+
+router.patch(
+  "/:id/read",
+  authenticate,
+  authorize("TOKEN_MANAGER"),
+  validate(orderIdParamSchema),
+  async (req, res, next) => {
+    try {
+      res.json({ success: true, data: await service.markRead(req.params.id) });
+    } catch (e) {
+      next(e);
+    }
+  },
+);
+
+export default router;
