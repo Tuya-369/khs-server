@@ -26,12 +26,22 @@ enum OrderStatus {
   CANCELLED
 }
 
+enum ProjectName {
+  UG               @map("UG")
+  UB               @map("UB")
+  BAYAJUULAH       @map("Баяжуулах")
+  PROJECT          @map("Төсөл")
+  OPERATION        @map("operation")
+  CONTRACTION      @map("contraction")
+}
+
 model User {
   id            String         @id @default(uuid())
-  sapId         String         @unique
+  sapId         String?        @unique
   firstName     String
   lastName      String
   phoneNumber   String
+  ProjectName   ProjectName    @default(UG)
   passwordHash  String
   role          Role           @default(EMPLOYEE)
   isActive      Boolean        @default(true)
@@ -134,4 +144,13 @@ model Notification {
   message   String
   isRead    Boolean  @default(false)
   createdAt DateTime @default(now())
+}
+
+model OtpVerification {
+  id          String   @id @default(uuid())
+  phoneNumber String   @unique // Нэг утасны дугаар дээр нэг л идэвхтэй код байна
+  code        String   // Хэрэглэгч рүү илгээсэн 6 оронтой OTP код
+  expiresAt   DateTime // Код хүчинтэй байх хугацаа дуусах цэг (Жишээ нь: 3 минут)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }

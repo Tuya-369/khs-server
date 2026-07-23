@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "User"
+ALTER COLUMN "sapId" DROP NOT NULL;

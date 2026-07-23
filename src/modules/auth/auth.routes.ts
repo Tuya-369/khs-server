@@ -5,6 +5,8 @@ import {
   createUserByAdminSchema,
   registerSchema,
   loginSchema,
+  verifyOtpSchema,
+  updateMeSchema,
 } from "./auth.validation";
 import { authenticate } from "../../middlewares/auth.middleware";
 import { authorize } from "../../middlewares/role.middleware";
@@ -21,8 +23,15 @@ router.post(
   controller.createByAdmin,
 );
 router.post("/login", validate(loginSchema), controller.login);
+router.post("/verify-otp", validate(verifyOtpSchema), controller.verifyOtp);
 router.post("/refresh", controller.refresh);
 router.post("/logout", controller.logout);
 router.get("/me", authenticate, controller.me);
+router.patch(
+  "/me",
+  authenticate,
+  validate(updateMeSchema),
+  controller.updateMe,
+);
 
 export default router;

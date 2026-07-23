@@ -17,13 +17,11 @@ export const validate = (schema: AnyZodObject) => {
           field: err.path.join(".").replace(/^(body|query|params)\./, ""),
           message: err.message,
         }));
+
+        const firstMessage =
+          formattedErrors[0]?.message || "Оруулсан өгөгдөл буруу байна.";
         return next(
-          new AppError(
-            400,
-            "Оруулсан өгөгдөл буруу байна.",
-            formattedErrors,
-            "VALIDATION_ERROR",
-          ),
+          new AppError(400, firstMessage, formattedErrors, "VALIDATION_ERROR"),
         );
       }
       return next(error);

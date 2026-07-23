@@ -2,7 +2,7 @@ import app from "./app";
 import { logger } from "./utils/logger";
 import { prisma } from "./utils/prisma";
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5001;
 
 const server = app.listen(PORT, () => {
   logger.info(`Сервер одоо http://localhost:${PORT} порт дээр ажиллаж байна.`);
