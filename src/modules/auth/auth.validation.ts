@@ -38,10 +38,10 @@ export const loginSchema = z.object({
     password: z.string().min(1, "Нууц үг оруулна уу."),
   }),
 });
-
+//hgghjdsklgds
 export const verifyOtpSchema = z.object({
   body: z.object({
-    otpToken: z.string().min(1, "OTP сесс токен шаардлагатай."),
+    otpToken: z.string().min(1, "OTP сесс токен шаардлагатай ."),
     code: z
       .string()
       .trim()
