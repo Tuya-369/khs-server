@@ -287,23 +287,15 @@ export class AuthService {
     }
     if (!user.isActive) throw new AppError(403, "Таны бүртгэл идэвхгүй байна.");
 
-    if (!user.phoneNumber) {
-      throw new AppError(400, "OTP илгээх утасны дугаар бүртгэлгүй байна.");
-    }
-
-    const otpSendResult: SendOtpResult = await this.sendOtp(user.phoneNumber);
-    const otpToken = this.issueOtpToken(user.id, user.phoneNumber);
-
-    return {
-      requiresOtp: true,
-      otpToken,
-      phone: this.maskPhone(user.phoneNumber),
-      message: "Нэг удаагийн код утсанд илгээгдлээ.",
-      debugCode:
-        process.env.NODE_ENV !== "production"
-          ? otpSendResult.debugCode || undefined
-          : undefined,
-    };
+    // OTP баталгаажуулалт түр хугацаагаар идэвхгүй болгосон (API key байхгүй тул).
+    return this.issueSession({
+      id: user.id,
+      sapId: user.sapId,
+      role: user.role,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      ProjectName: user.ProjectName,
+    });
   }
 
   async verifyLoginOtp(data: { otpToken: string; code: string }) {
