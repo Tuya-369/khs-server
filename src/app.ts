@@ -19,12 +19,24 @@ const toInt = (value: string | undefined, fallback: number): number => {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 };
 
+const corsWhitelist = (process.env.CORS_WHITELIST || "http://localhost:3000")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
 app.set("trust proxy", 1);
 
 app.use(helmet());
 app.use(
   cors({
-    origin: process.env.CORS_WHITELIST?.split(",") || "*",
+    origin(origin, callback) {
+      if (!origin || corsWhitelist.includes(origin)) {
+        callback(null, true);
+        return;
+      }
+
+      callback(new Error(`CORS origin is not allowed: ${origin}`));
+    },
     credentials: true,
   }),
 );
