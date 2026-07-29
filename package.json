@@ -4,6 +4,7 @@
   "description": "Fleet and Merch Management API",
   "main": "dist/server.js",
   "scripts": {
+    "postinstall": "npx prisma generate",
     "build": "npx prisma generate && tsc",
     "build:prod": "tsc",
     "start": "node dist/server.js",
@@ -50,7 +51,5 @@
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"
-  },
-  "postinstall": "prisma generate",
-  "build": "prisma generate && nest build"
+  }
 }
