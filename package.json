@@ -51,5 +51,6 @@
   "prisma": {
     "seed": "ts-node prisma/seed.ts"
   },
-  "build:prod": "npx prisma generate && tsc"
+  "postinstall": "prisma generate",
+  "build": "prisma generate && nest build"
 }
