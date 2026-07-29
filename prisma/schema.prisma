@@ -35,6 +35,11 @@ enum ProjectName {
   CONTRACTION      @map("contraction")
 }
 
+enum OtpPurpose {
+  REGISTRATION
+  PASSWORD_RESET
+}
+
 model User {
   id            String         @id @default(uuid())
   sapId         String?        @unique
@@ -148,9 +153,24 @@ model Notification {
 
 model OtpVerification {
   id          String   @id @default(uuid())
-  phoneNumber String   @unique // Нэг утасны дугаар дээр нэг л идэвхтэй код байна
+  phoneNumber String   @unique
   code        String   // Хэрэглэгч рүү илгээсэн 6 оронтой OTP код
+  purpose     OtpPurpose
   expiresAt   DateTime // Код хүчинтэй байх хугацаа дуусах цэг (Жишээ нь: 3 минут)
+  usedAt      DateTime?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+model PendingRegistration {
+  id          String      @id @default(uuid())
+  phoneNumber String      @unique
+  sapId       String?
+  firstName   String
+  lastName    String
+  ProjectName ProjectName
+  passwordHash String
+  expiresAt   DateTime
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
 }

@@ -1,6 +1,7 @@
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
-import { Role } from "@prisma/client";
+import axios from "axios";
+import { OtpPurpose, Role } from "@prisma/client";
 import { AppError } from "../../errors/app-error";
 import { prisma } from "../../utils/prisma";
 import { logger } from "../../utils/logger";
@@ -8,6 +9,12 @@ import { logger } from "../../utils/logger";
 type SendOtpResult = {
   message: string;
   debugCode?: string;
+};
+
+type ResetTokenPayload = {
+  userId: string;
+  phoneNumber: string;
+  purpose: string;
 };
 
 type ProjectNameValue =
@@ -97,6 +104,14 @@ export class AuthService {
     );
   }
 
+  private issueResetToken(userId: string, phoneNumber: string): string {
+    return jwt.sign(
+      { userId, phoneNumber, purpose: "password_reset" },
+      this.getOtpSecret(),
+      { expiresIn: "5m" },
+    );
+  }
+
   private async issueSession(user: {
     id: string;
     sapId: string | null;
@@ -130,7 +145,7 @@ export class AuthService {
     };
   }
 
-  async sendOtp(phoneNumber: string) {
+  private async sendOtp(phoneNumber: string, purpose: OtpPurpose) {
     const formattedPhone = this.normalizePhone(phoneNumber);
 
     if (!formattedPhone) {
@@ -142,14 +157,18 @@ export class AuthService {
 
     await prisma.otpVerification.upsert({
       where: { phoneNumber: formattedPhone },
-      update: { code: randomCode, expiresAt },
-      create: { phoneNumber: formattedPhone, code: randomCode, expiresAt },
+      update: { code: randomCode, purpose, expiresAt, usedAt: null },
+      create: {
+        phoneNumber: formattedPhone,
+        code: randomCode,
+        purpose,
+        expiresAt,
+      },
     });
 
-    const endpoint =
-      process.env.CALLPRO_SMS_ENDPOINT || "https://api.callpro.mn/v1/sms/send";
+    const endpoint = "https://api-text.callpro.mn/v1/sms/send";
     const apiKey = process.env.CALLPRO_API_KEY;
-    const senderName = process.env.CALLPRO_SENDER_NAME || "KHS";
+    const senderNumber = "72723355";
 
     const smsText = `Таны баталгаажуулах код: ${randomCode}`;
 
@@ -166,36 +185,213 @@ export class AuthService {
       throw new AppError(500, "CALLPRO_API_KEY тохируулаагүй байна.");
     }
 
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-        "x-api-key": apiKey,
-      },
-      body: JSON.stringify({
-        from: senderName,
-        to: formattedPhone,
-        message: smsText,
-      }),
-    });
-
-    const raw = await response.text();
-    if (!response.ok) {
+    try {
+      await axios.post(
+        endpoint,
+        {
+          from: senderNumber,
+          to: formattedPhone,
+          text: smsText,
+        },
+        {
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+            "x-api-key": apiKey,
+          },
+        },
+      );
+    } catch (error) {
+      const response = axios.isAxiosError(error) ? error.response : undefined;
+      const providerMessage =
+        typeof response?.data === "string"
+          ? response.data
+          : JSON.stringify(response?.data || {});
       logger.error("SMS provider error", {
-        status: response.status,
-        body: raw,
+        status: response?.status,
+        body: providerMessage,
       });
 
       const message =
         process.env.NODE_ENV === "production"
           ? "SMS илгээхэд алдаа гарлаа. Дараа дахин оролдоно уу."
-          : `SMS илгээхэд алдаа гарлаа. Status: ${response.status}. ${raw}`;
+          : `SMS илгээхэд алдаа гарлаа. Status: ${response?.status || "unknown"}.`;
 
       throw new AppError(502, message);
     }
 
     return { message: "Баталгаажуулах код амжилттай илгээгдлээ." };
+  }
+
+  private async verifyOtpCode(
+    phoneNumber: string,
+    code: string,
+    purpose: OtpPurpose,
+  ) {
+    const formattedPhone = this.normalizePhone(phoneNumber);
+    const otp = await prisma.otpVerification.findUnique({
+      where: { phoneNumber: formattedPhone },
+    });
+
+    if (!otp || otp.purpose !== purpose || otp.usedAt) {
+      throw new AppError(
+        400,
+        "Баталгаажуулах код олдсонгүй эсвэл ашиглагдсан байна.",
+      );
+    }
+    if (otp.expiresAt < new Date()) {
+      await prisma.otpVerification.delete({
+        where: { phoneNumber: formattedPhone },
+      });
+      throw new AppError(400, "Баталгаажуулах кодын хугацаа дууссан байна.");
+    }
+    if (otp.code !== code.trim()) {
+      throw new AppError(400, "Баталгаажуулах код буруу байна.");
+    }
+
+    return formattedPhone;
+  }
+
+  async requestRegistrationOtp(data: RegisterPayload) {
+    const phoneNumber = this.normalizePhone(data.phoneNumber);
+    const sapId = this.normalizeSapId(data.sapId);
+    const existingUser = await prisma.user.findFirst({
+      where: { OR: [{ phoneNumber }, ...(sapId ? [{ sapId }] : [])] },
+    });
+    if (existingUser) {
+      throw new AppError(
+        400,
+        "Энэ утасны дугаар эсвэл SAP ID-тай хэрэглэгч бүртгэгдсэн байна.",
+      );
+    }
+
+    await prisma.pendingRegistration.upsert({
+      where: { phoneNumber },
+      update: {
+        sapId,
+        firstName: data.firstName,
+        lastName: data.lastName,
+        ProjectName: data.ProjectName,
+        passwordHash: await bcrypt.hash(data.password, 10),
+        expiresAt: new Date(Date.now() + this.otpExpiresInMs),
+      },
+      create: {
+        phoneNumber,
+        sapId,
+        firstName: data.firstName,
+        lastName: data.lastName,
+        ProjectName: data.ProjectName,
+        passwordHash: await bcrypt.hash(data.password, 10),
+        expiresAt: new Date(Date.now() + this.otpExpiresInMs),
+      },
+    });
+
+    return this.sendOtp(phoneNumber, "REGISTRATION");
+  }
+
+  async verifyRegistrationOtp(data: { phoneNumber: string; code: string }) {
+    const phoneNumber = await this.verifyOtpCode(
+      data.phoneNumber,
+      data.code,
+      "REGISTRATION",
+    );
+    const pending = await prisma.pendingRegistration.findUnique({
+      where: { phoneNumber },
+    });
+    if (!pending || pending.expiresAt < new Date()) {
+      throw new AppError(
+        400,
+        "Бүртгэлийн хүсэлтийн хугацаа дууссан байна. Дахин код авна уу.",
+      );
+    }
+
+    return prisma.$transaction(async (transaction) => {
+      const existingUser = await transaction.user.findFirst({
+        where: {
+          OR: [
+            { phoneNumber },
+            ...(pending.sapId ? [{ sapId: pending.sapId }] : []),
+          ],
+        },
+      });
+      if (existingUser)
+        throw new AppError(400, "Энэ хэрэглэгч аль хэдийн бүртгэгдсэн байна.");
+
+      const user = await transaction.user.create({
+        data: {
+          sapId: pending.sapId,
+          firstName: pending.firstName,
+          lastName: pending.lastName,
+          ProjectName: pending.ProjectName,
+          phoneNumber: pending.phoneNumber,
+          passwordHash: pending.passwordHash,
+          role: "EMPLOYEE",
+        },
+      });
+      await transaction.otpVerification.update({
+        where: { phoneNumber },
+        data: { usedAt: new Date() },
+      });
+      await transaction.pendingRegistration.delete({ where: { phoneNumber } });
+      return {
+        id: user.id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        phoneNumber: user.phoneNumber,
+      };
+    });
+  }
+
+  async forgotPassword(phoneNumber: string) {
+    const formattedPhone = this.normalizePhone(phoneNumber);
+    const user = await prisma.user.findFirst({
+      where: { phoneNumber: formattedPhone },
+    });
+    if (!user)
+      throw new AppError(
+        404,
+        "Энэ утасны дугаартай хэрэглэгч бүртгэлгүй байна.",
+      );
+    return this.sendOtp(formattedPhone, "PASSWORD_RESET");
+  }
+
+  async verifyForgotOtp(data: { phoneNumber: string; code: string }) {
+    const phoneNumber = await this.verifyOtpCode(
+      data.phoneNumber,
+      data.code,
+      "PASSWORD_RESET",
+    );
+    const user = await prisma.user.findFirst({ where: { phoneNumber } });
+    if (!user) throw new AppError(404, "Хэрэглэгч олдсонгүй.");
+
+    await prisma.otpVerification.update({
+      where: { phoneNumber },
+      data: { usedAt: new Date() },
+    });
+    return { resetToken: this.issueResetToken(user.id, phoneNumber) };
+  }
+
+  async resetPassword(data: { resetToken: string; password: string }) {
+    let token: ResetTokenPayload;
+    try {
+      token = jwt.verify(
+        data.resetToken,
+        this.getOtpSecret(),
+      ) as ResetTokenPayload;
+    } catch {
+      throw new AppError(
+        401,
+        "Нууц үг солих баталгаажуулалтын хугацаа дууссан байна.",
+      );
+    }
+    if (token.purpose !== "password_reset") {
+      throw new AppError(401, "Нууц үг солих баталгаажуулалт буруу байна.");
+    }
+    await prisma.user.update({
+      where: { id: token.userId },
+      data: { passwordHash: await bcrypt.hash(data.password, 10) },
+    });
+    await prisma.refreshToken.deleteMany({ where: { userId: token.userId } });
   }
 
   async createUserByAdmin(data: CreateUserPayload) {

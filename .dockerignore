@@ -7,6 +7,5 @@ docker-compose*.yml
 .env
 .env.*
 .vscode
-dist
 coverage
 *.md

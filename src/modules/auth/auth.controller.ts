@@ -23,6 +23,28 @@ export class AuthController {
     }
   }
 
+  async requestRegistrationOtp(
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ) {
+    try {
+      const result = await authService.requestRegistrationOtp(req.body);
+      res.status(200).json({ success: true, data: result });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async verifyRegistrationOtp(req: Request, res: Response, next: NextFunction) {
+    try {
+      const user = await authService.verifyRegistrationOtp(req.body);
+      res.status(201).json({ success: true, data: user });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async login(req: Request, res: Response, next: NextFunction) {
     try {
       const { user, accessToken, refreshToken } = await authService.login(
@@ -55,6 +77,35 @@ export class AuthController {
       });
 
       res.status(200).json({ success: true, data: { user, accessToken } });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async forgotPassword(req: Request, res: Response, next: NextFunction) {
+    try {
+      const result = await authService.forgotPassword(req.body.phoneNumber);
+      res.status(200).json({ success: true, data: result });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async verifyForgotOtp(req: Request, res: Response, next: NextFunction) {
+    try {
+      const result = await authService.verifyForgotOtp(req.body);
+      res.status(200).json({ success: true, data: result });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async resetPassword(req: Request, res: Response, next: NextFunction) {
+    try {
+      await authService.resetPassword(req.body);
+      res
+        .status(200)
+        .json({ success: true, message: "Нууц үг амжилттай шинэчлэгдлээ." });
     } catch (error) {
       next(error);
     }

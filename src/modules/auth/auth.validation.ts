@@ -49,6 +49,46 @@ export const verifyOtpSchema = z.object({
   }),
 });
 
+const phoneNumberSchema = z
+  .string()
+  .trim()
+  .min(8, "Утасны дугаар буруу байна.");
+const otpCodeSchema = z
+  .string()
+  .trim()
+  .regex(/^\d{6}$/, "OTP код 6 оронтой тоо байна.");
+
+export const forgotPasswordSchema = z.object({
+  body: z.object({ phoneNumber: phoneNumberSchema }),
+});
+
+export const verifyForgotOtpSchema = z.object({
+  body: z.object({ phoneNumber: phoneNumberSchema, code: otpCodeSchema }),
+});
+
+export const resetPasswordSchema = z.object({
+  body: z
+    .object({
+      resetToken: z
+        .string()
+        .min(1, "Нууц үг солих баталгаажуулалт шаардлагатай."),
+      password: z.string().min(6, "Нууц үг хамгийн багадаа 6 тэмдэгт байна."),
+      confirmPassword: z.string().min(1, "Нууц үгээ давтаж оруулна уу."),
+    })
+    .refine((value) => value.password === value.confirmPassword, {
+      message: "Нууц үг зөрүүтэй байна.",
+      path: ["confirmPassword"],
+    }),
+});
+
+export const requestRegistrationOtpSchema = z.object({
+  body: registerSchema.shape.body,
+});
+
+export const verifyRegistrationOtpSchema = z.object({
+  body: z.object({ phoneNumber: phoneNumberSchema, code: otpCodeSchema }),
+});
+
 export const createUserByAdminSchema = z.object({
   body: z.object({
     sapId: sapIdSchema,
