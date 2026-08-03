@@ -23,7 +23,7 @@ enum RequestStatus {
 enum OrderStatus {
   NEW
   CONFIRMED
-  CANCELLED
+  REJECTED
 }
 
 enum ProjectName {
@@ -55,6 +55,7 @@ model User {
   vehicles      Vehicle[]
   requests      RepairRequest[]
   orders        MerchOrder[]
+  rejectedOrders MerchOrder[] @relation("RejectedOrders")
   refreshTokens RefreshToken[]
   notifications Notification[]
 }
@@ -138,6 +139,9 @@ model MerchOrder {
   status           OrderStatus @default(NEW)
   isReadByManager  Boolean     @default(false)
   orderedAt        DateTime    @default(now())
+  rejectedAt       DateTime?
+  rejectedById     String?
+  rejectedBy       User?       @relation("RejectedOrders", fields: [rejectedById], references: [id], onDelete: SetNull)
   updatedAt        DateTime    @updatedAt
 }
 

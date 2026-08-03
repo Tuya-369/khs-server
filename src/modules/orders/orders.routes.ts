@@ -32,7 +32,7 @@ router.post(
 router.get(
   "/my",
   authenticate,
-  authorize("EMPLOYEE", "DRIVER"),
+  authorize("EMPLOYEE", "DRIVER", "ADMIN", "TOKEN_MANAGER"),
   async (req, res, next) => {
     try {
       res.json({
@@ -78,6 +78,39 @@ router.patch(
     }
   },
 );
+
+router
+  .route("/:id/reject")
+  .patch(
+    authenticate,
+    authorize("TOKEN_MANAGER"),
+    validate(orderIdParamSchema),
+    async (req, res, next) => {
+      try {
+        res.json({
+          success: true,
+          data: await service.rejectOrder(req.params.id, req.user!.userId),
+        });
+      } catch (e) {
+        next(e);
+      }
+    },
+  )
+  .post(
+    authenticate,
+    authorize("TOKEN_MANAGER"),
+    validate(orderIdParamSchema),
+    async (req, res, next) => {
+      try {
+        res.json({
+          success: true,
+          data: await service.rejectOrder(req.params.id, req.user!.userId),
+        });
+      } catch (e) {
+        next(e);
+      }
+    },
+  );
 
 router.patch(
   "/:id/read",

@@ -43,6 +43,7 @@ export class OrdersService {
     const where: any = {};
     if (filter === "new") where.status = "NEW";
     if (filter === "confirmed") where.status = "CONFIRMED";
+    if (filter === "rejected") where.status = "REJECTED";
     if (filter === "unread") where.isReadByManager = false;
 
     return prisma.merchOrder.findMany({
@@ -53,9 +54,55 @@ export class OrdersService {
   }
 
   async confirmOrder(id: string) {
+    const order = await prisma.merchOrder.findUnique({ where: { id } });
+    if (!order) {
+      throw new AppError(404, "Захиалга олдсонгүй.", [], "ORDER_NOT_FOUND");
+    }
+    if (order.status !== "NEW") {
+      throw new AppError(
+        409,
+        "Энэ захиалгын төлөв аль хэдийн шийдэгдсэн байна.",
+      );
+    }
+
     return prisma.merchOrder.update({
       where: { id },
       data: { status: "CONFIRMED" },
+    });
+  }
+
+  async rejectOrder(id: string, managerId: string) {
+    const order = await prisma.merchOrder.findUnique({ where: { id } });
+    if (!order) {
+      throw new AppError(404, "Захиалга олдсонгүй.", [], "ORDER_NOT_FOUND");
+    }
+    if (order.status !== "NEW") {
+      throw new AppError(
+        409,
+        "Энэ захиалгын төлөв аль хэдийн шийдэгдсэн байна.",
+      );
+    }
+
+    return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const rejectedOrder = await tx.merchOrder.update({
+        where: { id },
+        data: {
+          status: "REJECTED",
+          rejectedAt: new Date(),
+          rejectedById: managerId,
+        },
+        include: { user: true, merchItem: true },
+      });
+
+      await tx.notification.create({
+        data: {
+          userId: rejectedOrder.userId,
+          title: "Барааны захиалга батлагдаагүй",
+          message: "Таны барааны захиалга батлагдаагүй.",
+        },
+      });
+
+      return rejectedOrder;
     });
   }
 

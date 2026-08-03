@@ -17,7 +17,9 @@ export const createOrderSchema = z.object({
 
 export const managerOrdersQuerySchema = z.object({
   query: z.object({
-    filter: z.enum(["new", "confirmed", "unread", "all"]).optional(),
+    filter: z
+      .enum(["new", "confirmed", "rejected", "unread", "all"])
+      .optional(),
   }),
 });
 
