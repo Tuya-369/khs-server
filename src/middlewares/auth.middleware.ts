@@ -33,7 +33,7 @@ export const authenticate = (
     ) as JwtPayload;
     req.user = decoded;
     next();
-  } catch (error) {
+  } catch {
     return next(new AppError(401, "Хүчингүй эсвэл хугацаа нь дууссан токен."));
   }
 };

@@ -1,3 +1,4 @@
+import type { Prisma } from "@prisma/client";
 import { prisma } from "../../utils/prisma";
 
 export class MerchService {
@@ -9,11 +10,11 @@ export class MerchService {
     return prisma.merchItem.findUniqueOrThrow({ where: { id } });
   }
 
-  async create(data: any) {
+  async create(data: Prisma.MerchItemCreateInput) {
     return prisma.merchItem.create({ data });
   }
 
-  async update(id: string, data: any) {
+  async update(id: string, data: Prisma.MerchItemUpdateInput) {
     return prisma.merchItem.update({ where: { id }, data });
   }
 

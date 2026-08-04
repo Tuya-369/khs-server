@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import { RequestsService } from "./requests.service";
 import { uploadToCloudinary } from "../../utils/cloudinary";
+import { AppError } from "../../errors/app-error";
 
 const service = new RequestsService();
 
@@ -12,7 +13,7 @@ const toPositiveNumber = (value: string | undefined, fallback: number) => {
 export class RequestsController {
   async getOptions(req: Request, res: Response, next: NextFunction) {
     try {
-      const options = await service.getDriverFormOptions(req.user!.userId);
+      const options = await service.getDriverFormOptions();
       res.status(200).json({ success: true, data: options });
     } catch (error) {
       next(error);
@@ -22,6 +23,13 @@ export class RequestsController {
   async create(req: Request, res: Response, next: NextFunction) {
     try {
       const files = (req.files as Express.Multer.File[]) || [];
+      if (files.length === 0) {
+        throw new AppError(
+          400,
+          "Эвдэрсэн хэсгийн дор хаяж нэг зураг оруулна уу.",
+        );
+      }
+
       const softMaxImageMb = toPositiveNumber(process.env.IMAGE_MAX_SIZE_MB, 8);
       const softMaxImageBytes = softMaxImageMb * 1024 * 1024;
 
@@ -43,6 +51,12 @@ export class RequestsController {
         .filter((url): url is string => Boolean(url));
 
       const failedUploads = allowedFiles.length - imageUrls.length;
+      if (imageUrls.length === 0) {
+        throw new AppError(
+          400,
+          "Зураг амжилттай хуулж чадсангүй. Дахин оролдоно уу.",
+        );
+      }
 
       const request = await service.createRequest(
         req.user!.userId,
@@ -78,6 +92,15 @@ export class RequestsController {
     try {
       const result = await service.getAllRequests(req.query);
       res.status(200).json({ success: true, data: result });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async getById(req: Request, res: Response, next: NextFunction) {
+    try {
+      const request = await service.getRequestById(req.params.id);
+      res.status(200).json({ success: true, data: request });
     } catch (error) {
       next(error);
     }

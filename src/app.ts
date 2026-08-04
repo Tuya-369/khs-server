@@ -21,7 +21,7 @@ const toInt = (value: string | undefined, fallback: number): number => {
 
 const corsWhitelist = (process.env.CORS_WHITELIST || "http://localhost:3000")
   .split(",")
-  .map((origin) => origin.trim())
+  .map((origin) => origin.trim().replace(/\/$/, ""))
   .filter(Boolean);
 
 app.set("trust proxy", 1);
@@ -30,7 +30,7 @@ app.use(helmet());
 app.use(
   cors({
     origin(origin, callback) {
-      if (!origin || corsWhitelist.includes(origin)) {
+      if (!origin || corsWhitelist.includes(origin.replace(/\/$/, ""))) {
         callback(null, true);
         return;
       }

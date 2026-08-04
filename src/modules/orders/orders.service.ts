@@ -2,8 +2,15 @@ import type { Prisma } from "@prisma/client";
 import { AppError } from "../../errors/app-error";
 import { prisma } from "../../utils/prisma";
 
+type CreateOrderData = {
+  merchItemId: string;
+  size: string;
+  color: string;
+  qty: number;
+};
+
 export class OrdersService {
-  async createOrder(userId: string, data: any) {
+  async createOrder(userId: string, data: CreateOrderData) {
     const item = await prisma.merchItem.findUnique({
       where: { id: data.merchItemId },
     });
@@ -40,7 +47,7 @@ export class OrdersService {
   }
 
   async getManagerOrders(filter: string) {
-    const where: any = {};
+    const where: Prisma.MerchOrderWhereInput = {};
     if (filter === "new") where.status = "NEW";
     if (filter === "confirmed") where.status = "CONFIRMED";
     if (filter === "rejected") where.status = "REJECTED";

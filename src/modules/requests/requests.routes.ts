@@ -38,6 +38,13 @@ router.get(
   validate(getAllRequestsSchema),
   controller.getAll,
 );
+router.get(
+  "/:id",
+  authenticate,
+  authorize("ADMIN"),
+  validate(requestIdParamSchema),
+  controller.getById,
+);
 router.patch(
   "/:id/status",
   authenticate,

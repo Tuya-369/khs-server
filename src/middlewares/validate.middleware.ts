@@ -5,11 +5,12 @@ import { AppError } from "../errors/app-error";
 export const validate = (schema: AnyZodObject) => {
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
-      await schema.parseAsync({
+      const validated = await schema.parseAsync({
         body: req.body,
         query: req.query,
         params: req.params,
       });
+      req.body = validated.body;
       return next();
     } catch (error) {
       if (error instanceof ZodError) {

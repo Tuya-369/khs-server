@@ -1,5 +1,21 @@
 import { z } from "zod";
 
+const partIdsSchema = z.preprocess(
+  (value) => {
+    if (typeof value !== "string") return value;
+
+    try {
+      return JSON.parse(value);
+    } catch {
+      return [value];
+    }
+  },
+  z
+    .array(z.string().uuid("Сэлбэгийн ID буруу байна."))
+    .min(1, "Дор хаяж нэг сэлбэг сонгоно уу.")
+    .max(50, "Нэг хүсэлтэд 50 хүртэл сэлбэг сонгож болно."),
+);
+
 const uuidParam = z.object({
   params: z.object({
     id: z.string().uuid("ID буруу форматтай байна."),
@@ -9,11 +25,7 @@ const uuidParam = z.object({
 export const createRequestSchema = z.object({
   body: z.object({
     vehicleId: z.string().uuid("Машины ID буруу байна."),
-    partId: z
-      .string()
-      .uuid("Сэлбэгийн ID буруу байна.")
-      .optional()
-      .or(z.literal("")),
+    partIds: partIdsSchema,
     description: z
       .string()
       .min(5, "Тайлбар хамгийн багадаа 5 тэмдэгт байна.")

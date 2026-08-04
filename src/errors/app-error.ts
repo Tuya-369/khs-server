@@ -2,7 +2,7 @@ export class AppError extends Error {
   constructor(
     public statusCode: number,
     public message: string,
-    public errors: any[] = [],
+    public errors: unknown[] = [],
     public code: string = "APP_ERROR",
   ) {
     super(message);

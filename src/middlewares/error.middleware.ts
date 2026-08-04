@@ -9,6 +9,8 @@ export const errorMiddleware = (
   res: Response,
   next: NextFunction,
 ) => {
+  void next;
+
   if (err instanceof multer.MulterError) {
     if (err.code === "LIMIT_FILE_SIZE") {
       return res.status(400).json({

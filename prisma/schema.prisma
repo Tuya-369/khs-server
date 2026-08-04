@@ -72,7 +72,9 @@ model RefreshToken {
 model Vehicle {
   id               String          @id @default(uuid())
   name             String
+  type             String          @default("Unspecified")
   plate            String          @unique
+  department       String          @default("Unassigned")
   assignedDriverId String?
   driver           User?           @relation(fields: [assignedDriverId], references: [id], onDelete: SetNull)
   parts            Part[]
@@ -80,12 +82,15 @@ model Vehicle {
 }
 
 model Part {
-  id        String          @id @default(uuid())
-  name      String
-  vehicleId String?
-  vehicle   Vehicle?        @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
-  isGlobal  Boolean         @default(false)
-  requests  RepairRequest[]
+  id           String          @id @default(uuid())
+  name         String
+  categoryId   String?
+  categoryName String?
+  vehicleId    String?
+  vehicle      Vehicle?        @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  isGlobal     Boolean         @default(false)
+  requests     RepairRequest[]
+  requestParts RequestPart[]
 }
 
 model RepairRequest {
@@ -102,6 +107,17 @@ model RepairRequest {
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
   images        RequestImage[]
+  requestParts  RequestPart[]
+}
+
+model RequestPart {
+  requestId String
+  partId    String
+  request   RepairRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  part      Part          @relation(fields: [partId], references: [id], onDelete: Cascade)
+
+  @@id([requestId, partId])
+  @@index([partId])
 }
 
 model RequestImage {

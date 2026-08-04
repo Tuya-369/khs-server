@@ -1,6 +1,25 @@
+import "dotenv/config";
 import app from "./app";
 import { logger } from "./utils/logger";
 import { prisma } from "./utils/prisma";
+
+const requiredProductionVariables = [
+  "DATABASE_URL",
+  "JWT_ACCESS_SECRET",
+  "JWT_REFRESH_SECRET",
+];
+
+if (process.env.NODE_ENV === "production") {
+  const missingVariables = requiredProductionVariables.filter(
+    (name) => !process.env[name],
+  );
+
+  if (missingVariables.length > 0) {
+    throw new Error(
+      `Production environment variables are missing: ${missingVariables.join(", ")}`,
+    );
+  }
+}
 
 const PORT = process.env.PORT || 5000;
 
