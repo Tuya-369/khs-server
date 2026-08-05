@@ -88,6 +88,7 @@ export class RequestsService {
       data: {
         driverId,
         vehicleId: data.vehicleId,
+        partId: parts[0]?.id,
         description: data.description,
         requestParts: {
           create: parts.map((part) => ({ partId: part.id })),

@@ -5,6 +5,16 @@ import { AppError } from "../../errors/app-error";
 const authService = new AuthService();
 const persistentSessionExpiresAt = new Date("2099-12-31T23:59:59.999Z");
 
+const getCookieOptions = (maxAge?: number) => ({
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  sameSite:
+    process.env.NODE_ENV === "production"
+      ? ("none" as const)
+      : ("strict" as const),
+  ...(maxAge ? { maxAge } : {}),
+});
+
 export class AuthController {
   async createByAdmin(req: Request, res: Response, next: NextFunction) {
     try {
@@ -50,12 +60,7 @@ export class AuthController {
     try {
       const result = await authService.login(req.body);
 
-      res.cookie("otpToken", result.otpToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "strict",
-        maxAge: 5 * 60 * 1000,
-      });
+      res.cookie("otpToken", result.otpToken, getCookieOptions(5 * 60 * 1000));
 
       res.status(200).json({ success: true, data: result });
     } catch (error) {
@@ -81,12 +86,10 @@ export class AuthController {
           code: req.body.code,
         });
 
-      res.clearCookie("otpToken");
+      res.clearCookie("otpToken", getCookieOptions(5 * 60 * 1000));
 
       res.cookie("refreshToken", refreshToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "strict",
+        ...getCookieOptions(),
         expires: persistentSessionExpiresAt,
       });
 
@@ -139,7 +142,7 @@ export class AuthController {
     try {
       const token = req.cookies.refreshToken;
       if (token) await authService.logout(token);
-      res.clearCookie("refreshToken");
+      res.clearCookie("refreshToken", getCookieOptions());
       res.status(200).json({ success: true, message: "Амжилттай гарлаа." });
     } catch (error) {
       next(error);

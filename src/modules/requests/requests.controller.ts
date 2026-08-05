@@ -23,13 +23,6 @@ export class RequestsController {
   async create(req: Request, res: Response, next: NextFunction) {
     try {
       const files = (req.files as Express.Multer.File[]) || [];
-      if (files.length === 0) {
-        throw new AppError(
-          400,
-          "Эвдэрсэн хэсгийн дор хаяж нэг зураг оруулна уу.",
-        );
-      }
-
       const softMaxImageMb = toPositiveNumber(process.env.IMAGE_MAX_SIZE_MB, 8);
       const softMaxImageBytes = softMaxImageMb * 1024 * 1024;
 
@@ -51,7 +44,7 @@ export class RequestsController {
         .filter((url): url is string => Boolean(url));
 
       const failedUploads = allowedFiles.length - imageUrls.length;
-      if (imageUrls.length === 0) {
+      if (files.length > 0 && imageUrls.length === 0) {
         throw new AppError(
           400,
           "Зураг амжилттай хуулж чадсангүй. Дахин оролдоно уу.",

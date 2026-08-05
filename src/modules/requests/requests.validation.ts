@@ -16,6 +16,12 @@ const partIdsSchema = z.preprocess(
     .max(50, "Нэг хүсэлтэд 50 хүртэл сэлбэг сонгож болно."),
 );
 
+const singlePartIdSchema = z.preprocess((value) => {
+  if (typeof value !== "string") return value;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}, z.string().uuid("Сэлбэгийн ID буруу байна.").optional());
+
 const uuidParam = z.object({
   params: z.object({
     id: z.string().uuid("ID буруу форматтай байна."),
@@ -23,14 +29,29 @@ const uuidParam = z.object({
 });
 
 export const createRequestSchema = z.object({
-  body: z.object({
-    vehicleId: z.string().uuid("Машины ID буруу байна."),
-    partIds: partIdsSchema,
-    description: z
-      .string()
-      .min(5, "Тайлбар хамгийн багадаа 5 тэмдэгт байна.")
-      .max(1000, "Тайлбар хамгийн ихдээ 1000 тэмдэгт байна."),
-  }),
+  body: z
+    .object({
+      vehicleId: z.string().uuid("Машины ID буруу байна."),
+      partIds: partIdsSchema.optional(),
+      partId: singlePartIdSchema,
+      description: z
+        .string()
+        .min(5, "Тайлбар хамгийн багадаа 5 тэмдэгт байна.")
+        .max(1000, "Тайлбар хамгийн ихдээ 1000 тэмдэгт байна."),
+    })
+    .transform((value) => ({
+      ...value,
+      partIds:
+        value.partIds && value.partIds.length > 0
+          ? value.partIds
+          : value.partId
+            ? [value.partId]
+            : [],
+    }))
+    .refine((value) => value.partIds.length > 0, {
+      message: "Дор хаяж нэг сэлбэг сонгоно уу.",
+      path: ["partIds"],
+    }),
 });
 
 export const getAllRequestsSchema = z.object({
