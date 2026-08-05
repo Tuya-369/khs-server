@@ -4,6 +4,7 @@ import { AppError } from "../../errors/app-error";
 
 const authService = new AuthService();
 const persistentSessionExpiresAt = new Date("2099-12-31T23:59:59.999Z");
+const otpCookieMaxAgeMs = 60 * 1000;
 
 const getCookieOptions = (maxAge?: number) => ({
   httpOnly: true,
@@ -60,7 +61,11 @@ export class AuthController {
     try {
       const result = await authService.login(req.body);
 
-      res.cookie("otpToken", result.otpToken, getCookieOptions(5 * 60 * 1000));
+      res.cookie(
+        "otpToken",
+        result.otpToken,
+        getCookieOptions(otpCookieMaxAgeMs),
+      );
 
       res.status(200).json({ success: true, data: result });
     } catch (error) {
@@ -86,7 +91,7 @@ export class AuthController {
           code: req.body.code,
         });
 
-      res.clearCookie("otpToken", getCookieOptions(5 * 60 * 1000));
+      res.clearCookie("otpToken", getCookieOptions(otpCookieMaxAgeMs));
 
       res.cookie("refreshToken", refreshToken, {
         ...getCookieOptions(),

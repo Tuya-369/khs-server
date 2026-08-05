@@ -60,10 +60,14 @@ type UpdateMePayload = {
 };
 
 export class AuthService {
-  private readonly otpExpiresInMs = 3 * 60 * 1000;
+  private readonly otpExpiresInMs = 60 * 1000;
   private readonly nonExpiringSessionDate = new Date(
     "2099-12-31T23:59:59.999Z",
   );
+
+  private getOtpExpiresInSeconds(): number {
+    return Math.floor(this.otpExpiresInMs / 1000);
+  }
 
   private normalizeSapId(value: unknown): string | null {
     if (typeof value !== "string") return null;
@@ -105,7 +109,7 @@ export class AuthService {
       { userId, phoneNumber, purpose: "otp_login" },
       this.getOtpSecret(),
       {
-        expiresIn: "5m",
+        expiresIn: this.getOtpExpiresInSeconds(),
       },
     );
   }
@@ -114,7 +118,7 @@ export class AuthService {
     return jwt.sign(
       { userId, phoneNumber, purpose: "password_reset" },
       this.getOtpSecret(),
-      { expiresIn: "5m" },
+      { expiresIn: this.getOtpExpiresInSeconds() },
     );
   }
 
