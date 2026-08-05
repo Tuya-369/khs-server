@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 import { AppError } from "../errors/app-error";
+import { prisma } from "../utils/prisma";
 
 interface JwtPayload {
   userId: string;
@@ -31,8 +32,27 @@ export const authenticate = (
       token,
       process.env.JWT_ACCESS_SECRET || "access_secret",
     ) as JwtPayload;
-    req.user = decoded;
-    next();
+
+    prisma.user
+      .findUnique({
+        where: { id: decoded.userId },
+        select: { id: true, role: true, isActive: true },
+      })
+      .then((user) => {
+        if (!user) {
+          return next(new AppError(401, "Хэрэглэгч олдсонгүй."));
+        }
+
+        if (!user.isActive) {
+          return next(new AppError(403, "Таны бүртгэл идэвхгүй байна."));
+        }
+
+        req.user = { userId: user.id, role: user.role };
+        return next();
+      })
+      .catch(() =>
+        next(new AppError(500, "Хэрэглэгчийн эрх шалгах үед алдаа гарлаа.")),
+      );
   } catch {
     return next(new AppError(401, "Хүчингүй эсвэл хугацаа нь дууссан токен."));
   }
