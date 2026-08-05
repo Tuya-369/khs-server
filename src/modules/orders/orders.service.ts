@@ -55,12 +55,33 @@ export class OrdersService {
 
     return prisma.merchOrder.findMany({
       where,
-      include: { user: true, merchItem: true },
+      include: {
+        user: true,
+        merchItem: true,
+        confirmedBy: {
+          select: {
+            id: true,
+            sapId: true,
+            firstName: true,
+            lastName: true,
+            role: true,
+          },
+        },
+        rejectedBy: {
+          select: {
+            id: true,
+            sapId: true,
+            firstName: true,
+            lastName: true,
+            role: true,
+          },
+        },
+      },
       orderBy: { orderedAt: "desc" },
     });
   }
 
-  async confirmOrder(id: string) {
+  async confirmOrder(id: string, managerId: string) {
     const order = await prisma.merchOrder.findUnique({ where: { id } });
     if (!order) {
       throw new AppError(404, "Захиалга олдсонгүй.", [], "ORDER_NOT_FOUND");
@@ -74,7 +95,12 @@ export class OrdersService {
 
     return prisma.merchOrder.update({
       where: { id },
-      data: { status: "CONFIRMED" },
+      data: {
+        status: "CONFIRMED",
+        confirmedAt: new Date(),
+        confirmedById: managerId,
+      },
+      include: { user: true, merchItem: true },
     });
   }
 

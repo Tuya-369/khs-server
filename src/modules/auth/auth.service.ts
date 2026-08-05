@@ -45,6 +45,13 @@ type LoginPayload = {
   password: string;
 };
 
+type LoginChallengeResult = {
+  otpToken: string;
+  maskedPhone: string;
+  expiresIn: number;
+  debugCode?: string;
+};
+
 type UpdateMePayload = {
   firstName?: string;
   lastName?: string;
@@ -54,6 +61,9 @@ type UpdateMePayload = {
 
 export class AuthService {
   private readonly otpExpiresInMs = 3 * 60 * 1000;
+  private readonly nonExpiringSessionDate = new Date(
+    "2099-12-31T23:59:59.999Z",
+  );
 
   private normalizeSapId(value: unknown): string | null {
     if (typeof value !== "string") return null;
@@ -83,15 +93,11 @@ export class AuthService {
   }
 
   private issueAccessToken(userId: string, role: string): string {
-    return jwt.sign({ userId, role }, this.getAccessSecret(), {
-      expiresIn: "15m",
-    });
+    return jwt.sign({ userId, role }, this.getAccessSecret());
   }
 
   private issueRefreshToken(userId: string): string {
-    return jwt.sign({ userId }, this.getRefreshSecret(), {
-      expiresIn: "7d",
-    });
+    return jwt.sign({ userId }, this.getRefreshSecret());
   }
 
   private issueOtpToken(userId: string, phoneNumber: string): string {
@@ -127,7 +133,7 @@ export class AuthService {
       data: {
         token: refreshToken,
         userId: user.id,
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        expiresAt: this.nonExpiringSessionDate,
       },
     });
 
@@ -152,15 +158,40 @@ export class AuthService {
       throw new AppError(400, "Утасны дугаар хоосон байна.");
     }
 
+    const now = new Date();
+    const activeOtp = await prisma.otpVerification.findUnique({
+      where: { phoneNumber: formattedPhone },
+    });
+
+    if (
+      activeOtp &&
+      activeOtp.purpose === purpose &&
+      !activeOtp.usedAt &&
+      activeOtp.expiresAt > now
+    ) {
+      const remainingSeconds = Math.max(
+        1,
+        Math.ceil((activeOtp.expiresAt.getTime() - now.getTime()) / 1000),
+      );
+      throw new AppError(
+        429,
+        `Код аль хэдийн илгээгдсэн байна. ${remainingSeconds} сек дараа дахин оролдоно уу.`,
+        [],
+        "OTP_RESEND_COOLDOWN",
+      );
+    }
+
     const randomCode = Math.floor(100000 + Math.random() * 900000).toString();
     const expiresAt = new Date(Date.now() + this.otpExpiresInMs);
 
+    const codeHash = await bcrypt.hash(randomCode, 10);
+
     await prisma.otpVerification.upsert({
       where: { phoneNumber: formattedPhone },
-      update: { code: randomCode, purpose, expiresAt, usedAt: null },
+      update: { code: codeHash, purpose, expiresAt, usedAt: null },
       create: {
         phoneNumber: formattedPhone,
-        code: randomCode,
+        code: codeHash,
         purpose,
         expiresAt,
       },
@@ -236,17 +267,21 @@ export class AuthService {
     if (!otp || otp.purpose !== purpose || otp.usedAt) {
       throw new AppError(
         400,
-        "Баталгаажуулах код олдсонгүй эсвэл ашиглагдсан байна.",
+        "Код хүчингүй болсон байна. Дахин код авч оролдоно уу.",
       );
     }
     if (otp.expiresAt < new Date()) {
       await prisma.otpVerification.delete({
         where: { phoneNumber: formattedPhone },
       });
-      throw new AppError(400, "Баталгаажуулах кодын хугацаа дууссан байна.");
+      throw new AppError(
+        400,
+        "Кодын хугацаа дууссан байна. Дахин код авна уу.",
+      );
     }
-    if (otp.code !== code.trim()) {
-      throw new AppError(400, "Баталгаажуулах код буруу байна.");
+    const isValid = await bcrypt.compare(code.trim(), otp.code);
+    if (!isValid) {
+      throw new AppError(400, "Код буруу байна. Дахин шалгаад оруулна уу.");
     }
 
     return formattedPhone;
@@ -471,7 +506,7 @@ export class AuthService {
     });
   }
 
-  async login(data: LoginPayload) {
+  async login(data: LoginPayload): Promise<LoginChallengeResult> {
     const identifier = String(data.identifier || data.sapId || "").trim();
     const user = await prisma.user.findFirst({
       where: {
@@ -483,15 +518,17 @@ export class AuthService {
     }
     if (!user.isActive) throw new AppError(403, "Таны бүртгэл идэвхгүй байна.");
 
-    // OTP баталгаажуулалт түр хугацаагаар идэвхгүй болгосон (API key байхгүй тул).
-    return this.issueSession({
-      id: user.id,
-      sapId: user.sapId,
-      role: user.role,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      ProjectName: user.ProjectName,
-    });
+    const otpResult = await this.sendOtp(user.phoneNumber, "LOGIN");
+
+    return {
+      otpToken: this.issueOtpToken(
+        user.id,
+        this.normalizePhone(user.phoneNumber),
+      ),
+      maskedPhone: this.maskPhone(this.normalizePhone(user.phoneNumber)),
+      expiresIn: Math.floor(this.otpExpiresInMs / 1000),
+      ...(otpResult.debugCode ? { debugCode: otpResult.debugCode } : {}),
+    };
   }
 
   async verifyLoginOtp(data: { otpToken: string; code: string }) {
@@ -517,22 +554,34 @@ export class AuthService {
     });
 
     if (!otp) {
-      throw new AppError(400, "Баталгаажуулах код олдсонгүй.");
+      throw new AppError(400, "Код олдсонгүй. Дахин login хийж код авна уу.");
+    }
+
+    if (otp.purpose !== "LOGIN" || otp.usedAt) {
+      throw new AppError(
+        400,
+        "Энэ код аль хэдийн ашиглагдсан байна. Дахин login хийгээд шинэ код авна уу.",
+      );
     }
 
     if (otp.expiresAt < new Date()) {
       await prisma.otpVerification.delete({
         where: { phoneNumber: decoded.phoneNumber },
       });
-      throw new AppError(400, "Баталгаажуулах кодын хугацаа дууссан байна.");
+      throw new AppError(
+        400,
+        "Кодын хугацаа дууссан байна. Дахин код авна уу.",
+      );
     }
 
-    if (otp.code !== String(code).trim()) {
-      throw new AppError(400, "Баталгаажуулах код буруу байна.");
+    const isValid = await bcrypt.compare(String(code).trim(), otp.code);
+    if (!isValid) {
+      throw new AppError(400, "Код буруу байна. Дахин шалгаад оруулна уу.");
     }
 
-    await prisma.otpVerification.delete({
+    await prisma.otpVerification.update({
       where: { phoneNumber: decoded.phoneNumber },
+      data: { usedAt: new Date() },
     });
 
     const user = await prisma.user.findUnique({
@@ -561,13 +610,8 @@ export class AuthService {
       where: { token },
       include: { user: true },
     });
-    if (!dbToken || dbToken.expiresAt < new Date()) {
-      if (dbToken)
-        await prisma.refreshToken.delete({ where: { id: dbToken.id } });
-      throw new AppError(
-        401,
-        "Хүчингүй эсвэл хугацаа нь дууссан refresh токен.",
-      );
+    if (!dbToken) {
+      throw new AppError(401, "Хүчингүй refresh токен.");
     }
 
     const accessToken = this.issueAccessToken(

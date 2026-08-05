@@ -15,7 +15,7 @@ const service = new OrdersService();
 router.post(
   "/",
   authenticate,
-  authorize("EMPLOYEE", "DRIVER", "ADMIN", "TOKEN_MANAGER"),
+  authorize("EMPLOYEE", "DRIVER", "ADMIN", "TOKEN_MANAGER", "ADMIN_PANEL"),
   validate(createOrderSchema),
   async (req, res, next) => {
     try {
@@ -32,7 +32,7 @@ router.post(
 router.get(
   "/my",
   authenticate,
-  authorize("EMPLOYEE", "DRIVER", "ADMIN", "TOKEN_MANAGER"),
+  authorize("EMPLOYEE", "DRIVER", "ADMIN", "TOKEN_MANAGER", "ADMIN_PANEL"),
   async (req, res, next) => {
     try {
       res.json({
@@ -48,7 +48,7 @@ router.get(
 router.get(
   "/",
   authenticate,
-  authorize("TOKEN_MANAGER"),
+  authorize("TOKEN_MANAGER", "ADMIN_PANEL"),
   validate(managerOrdersQuerySchema),
   async (req, res, next) => {
     try {
@@ -65,13 +65,13 @@ router.get(
 router.patch(
   "/:id/confirm",
   authenticate,
-  authorize("TOKEN_MANAGER"),
+  authorize("TOKEN_MANAGER", "ADMIN_PANEL"),
   validate(orderIdParamSchema),
   async (req, res, next) => {
     try {
       res.json({
         success: true,
-        data: await service.confirmOrder(req.params.id),
+        data: await service.confirmOrder(req.params.id, req.user!.userId),
       });
     } catch (e) {
       next(e);
@@ -83,7 +83,7 @@ router
   .route("/:id/reject")
   .patch(
     authenticate,
-    authorize("TOKEN_MANAGER"),
+    authorize("TOKEN_MANAGER", "ADMIN_PANEL"),
     validate(orderIdParamSchema),
     async (req, res, next) => {
       try {
@@ -98,7 +98,7 @@ router
   )
   .post(
     authenticate,
-    authorize("TOKEN_MANAGER"),
+    authorize("TOKEN_MANAGER", "ADMIN_PANEL"),
     validate(orderIdParamSchema),
     async (req, res, next) => {
       try {
@@ -115,7 +115,7 @@ router
 router.patch(
   "/:id/read",
   authenticate,
-  authorize("TOKEN_MANAGER"),
+  authorize("TOKEN_MANAGER", "ADMIN_PANEL"),
   validate(orderIdParamSchema),
   async (req, res, next) => {
     try {

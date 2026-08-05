@@ -3,6 +3,7 @@ import { AuthService } from "./auth.service";
 import { AppError } from "../../errors/app-error";
 
 const authService = new AuthService();
+const persistentSessionExpiresAt = new Date("2099-12-31T23:59:59.999Z");
 
 export class AuthController {
   async createByAdmin(req: Request, res: Response, next: NextFunction) {
@@ -47,18 +48,16 @@ export class AuthController {
 
   async login(req: Request, res: Response, next: NextFunction) {
     try {
-      const { user, accessToken, refreshToken } = await authService.login(
-        req.body,
-      );
+      const result = await authService.login(req.body);
 
-      res.cookie("refreshToken", refreshToken, {
+      res.cookie("otpToken", result.otpToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
         sameSite: "strict",
-        maxAge: 7 * 24 * 60 * 60 * 1000,
+        maxAge: 5 * 60 * 1000,
       });
 
-      res.status(200).json({ success: true, data: { user, accessToken } });
+      res.status(200).json({ success: true, data: result });
     } catch (error) {
       next(error);
     }
@@ -66,14 +65,29 @@ export class AuthController {
 
   async verifyOtp(req: Request, res: Response, next: NextFunction) {
     try {
+      const otpToken = req.body.otpToken || req.cookies.otpToken;
+      if (!otpToken) {
+        throw new AppError(
+          400,
+          "OTP сесс токен олдсонгүй. Login-г дахин хийгээд кодоо баталгаажуулна уу.",
+          [],
+          "OTP_TOKEN_MISSING",
+        );
+      }
+
       const { user, accessToken, refreshToken } =
-        await authService.verifyLoginOtp(req.body);
+        await authService.verifyLoginOtp({
+          otpToken,
+          code: req.body.code,
+        });
+
+      res.clearCookie("otpToken");
 
       res.cookie("refreshToken", refreshToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
         sameSite: "strict",
-        maxAge: 7 * 24 * 60 * 60 * 1000,
+        expires: persistentSessionExpiresAt,
       });
 
       res.status(200).json({ success: true, data: { user, accessToken } });

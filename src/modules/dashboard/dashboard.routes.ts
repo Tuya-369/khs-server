@@ -22,10 +22,23 @@ router.get(
 router.get(
   "/token-summary",
   authenticate,
-  authorize("TOKEN_MANAGER"),
+  authorize("TOKEN_MANAGER", "ADMIN_PANEL"),
   async (req, res, next) => {
     try {
       res.json({ success: true, data: await service.getTokenSummary() });
+    } catch (e) {
+      next(e);
+    }
+  },
+);
+
+router.get(
+  "/admin-panel/orders",
+  authenticate,
+  authorize("ADMIN_PANEL"),
+  async (req, res, next) => {
+    try {
+      res.json({ success: true, data: await service.getAdminPanelOrders() });
     } catch (e) {
       next(e);
     }

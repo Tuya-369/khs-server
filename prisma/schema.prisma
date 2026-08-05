@@ -9,6 +9,7 @@ generator client {
 
 enum Role {
   ADMIN
+  ADMIN_PANEL
   DRIVER
   TOKEN_MANAGER
   EMPLOYEE
@@ -38,6 +39,7 @@ enum ProjectName {
 enum OtpPurpose {
   REGISTRATION
   PASSWORD_RESET
+  LOGIN
 }
 
 model User {
@@ -55,6 +57,7 @@ model User {
   vehicles      Vehicle[]
   requests      RepairRequest[]
   orders        MerchOrder[]
+  confirmedOrders MerchOrder[] @relation("ConfirmedOrders")
   rejectedOrders MerchOrder[] @relation("RejectedOrders")
   refreshTokens RefreshToken[]
   notifications Notification[]
@@ -155,6 +158,9 @@ model MerchOrder {
   status           OrderStatus @default(NEW)
   isReadByManager  Boolean     @default(false)
   orderedAt        DateTime    @default(now())
+  confirmedAt      DateTime?
+  confirmedById    String?
+  confirmedBy      User?       @relation("ConfirmedOrders", fields: [confirmedById], references: [id], onDelete: SetNull)
   rejectedAt       DateTime?
   rejectedById     String?
   rejectedBy       User?       @relation("RejectedOrders", fields: [rejectedById], references: [id], onDelete: SetNull)
@@ -174,9 +180,9 @@ model Notification {
 model OtpVerification {
   id          String   @id @default(uuid())
   phoneNumber String   @unique
-  code        String   // Хэрэглэгч рүү илгээсэн 6 оронтой OTP код
+  code        String   // Хэрэглэгч рүү илгээсэн OTP кодын hash утга
   purpose     OtpPurpose
-  expiresAt   DateTime // Код хүчинтэй байх хугацаа дуусах цэг (Жишээ нь: 3 минут)
+  expiresAt   DateTime // Код хүчинтэй байх хугацаа дуусах цэг
   usedAt      DateTime?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

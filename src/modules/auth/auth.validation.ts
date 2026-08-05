@@ -33,15 +33,26 @@ export const registerSchema = z.object({
 });
 
 export const loginSchema = z.object({
-  body: z.object({
-    sapId: z.string().trim().min(1, "SAP ID эсвэл утасны дугаар оруулна уу."),
-    password: z.string().min(1, "Нууц үг оруулна уу."),
-  }),
+  body: z
+    .object({
+      sapId: z.string().trim().optional(),
+      identifier: z.string().trim().optional(),
+      password: z.string().min(1, "Нууц үг оруулна уу."),
+    })
+    .refine(
+      (value) =>
+        Boolean(value.identifier && value.identifier.trim().length > 0) ||
+        Boolean(value.sapId && value.sapId.trim().length > 0),
+      {
+        message: "SAP ID эсвэл утасны дугаар оруулна уу.",
+        path: ["identifier"],
+      },
+    ),
 });
 //hgghjdsklgds
 export const verifyOtpSchema = z.object({
   body: z.object({
-    otpToken: z.string().min(1, "OTP сесс токен шаардлагатай ."),
+    otpToken: z.string().min(1, "OTP сесс токен шаардлагатай.").optional(),
     code: z
       .string()
       .trim()
@@ -97,7 +108,13 @@ export const createUserByAdminSchema = z.object({
     ProjectName: projectNameSchema,
     phoneNumber: z.string().min(8, "Утасны дугаар буруу байна."),
     password: z.string().min(6, "Нууц үг хамгийн багадаа 6 тэмдэгт байна."),
-    role: z.enum(["ADMIN", "DRIVER", "TOKEN_MANAGER", "EMPLOYEE"]),
+    role: z.enum([
+      "ADMIN",
+      "ADMIN_PANEL",
+      "DRIVER",
+      "TOKEN_MANAGER",
+      "EMPLOYEE",
+    ]),
   }),
 });
 
