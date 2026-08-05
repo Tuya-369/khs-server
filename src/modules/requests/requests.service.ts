@@ -81,8 +81,6 @@ export class RequestsService {
         OR: [{ isGlobal: true }, { vehicleId: vehicle.id }],
       },
     });
-    if (parts.length !== new Set(data.partIds).size)
-      throw new AppError(400, "Сонгосон сэлбэгийн мэдээлэл буруу байна.");
 
     return prisma.repairRequest.create({
       data: {

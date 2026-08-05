@@ -1,5 +1,8 @@
 import { z } from "zod";
 
+const uuidLikePattern =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 const partIdsSchema = z.preprocess(
   (value) => {
     if (typeof value !== "string") return value;
@@ -10,17 +13,14 @@ const partIdsSchema = z.preprocess(
       return [value];
     }
   },
-  z
-    .array(z.string().uuid("Сэлбэгийн ID буруу байна."))
-    .min(1, "Дор хаяж нэг сэлбэг сонгоно уу.")
-    .max(50, "Нэг хүсэлтэд 50 хүртэл сэлбэг сонгож болно."),
+  z.array(z.string()).max(50, "Нэг хүсэлтэд 50 хүртэл сэлбэг сонгож болно."),
 );
 
 const singlePartIdSchema = z.preprocess((value) => {
   if (typeof value !== "string") return value;
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : undefined;
-}, z.string().uuid("Сэлбэгийн ID буруу байна.").optional());
+}, z.string().optional());
 
 const uuidParam = z.object({
   params: z.object({
@@ -43,15 +43,13 @@ export const createRequestSchema = z.object({
       ...value,
       partIds:
         value.partIds && value.partIds.length > 0
-          ? value.partIds
+          ? value.partIds.filter((partId) => uuidLikePattern.test(partId))
           : value.partId
-            ? [value.partId]
+            ? uuidLikePattern.test(value.partId)
+              ? [value.partId]
+              : []
             : [],
-    }))
-    .refine((value) => value.partIds.length > 0, {
-      message: "Дор хаяж нэг сэлбэг сонгоно уу.",
-      path: ["partIds"],
-    }),
+    })),
 });
 
 export const getAllRequestsSchema = z.object({

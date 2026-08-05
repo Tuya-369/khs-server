@@ -24,7 +24,7 @@ const corsWhitelist = (process.env.CORS_WHITELIST || "http://localhost:3000")
   .map((origin) => origin.trim().replace(/\/$/, ""))
   .filter(Boolean);
 
-app.set("trust proxy", 1);
+app.set("trust proxy", true);
 
 app.use(helmet());
 app.use(
@@ -51,6 +51,9 @@ const limiter = rateLimit({
   message: "Хэт олон хүсэлт илгээсэн тул түр хязгаарлав.",
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req) =>
+    req.method === "OPTIONS" ||
+    Boolean(req.headers.authorization?.startsWith("Bearer ")),
 });
 app.use("/api/", limiter);
 
