@@ -5,7 +5,7 @@ import { prisma } from "../../utils/prisma";
 type CreateOrderData = {
   merchItemId: string;
   size: string;
-  color: string;
+  color?: string;
   qty: number;
 };
 
@@ -32,7 +32,7 @@ export class OrdersService {
           userId,
           merchItemId: data.merchItemId,
           size: data.size,
-          color: data.color,
+          color: item.colors.length > 0 ? (data.color ?? "") : "",
           qty: data.qty,
         },
       });
