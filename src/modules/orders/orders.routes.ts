@@ -7,6 +7,7 @@ import {
   createOrderSchema,
   managerOrdersQuerySchema,
   orderIdParamSchema,
+  updateOrderStatusSchema,
 } from "./orders.validation";
 
 const router = Router();
@@ -75,6 +76,23 @@ router.patch(
       });
     } catch (e) {
       next(e);
+    }
+  },
+);
+
+router.patch(
+  "/:id/status",
+  authenticate,
+  authorize("TOKEN_MANAGER", "ADMIN_PANEL"),
+  validate(updateOrderStatusSchema),
+  async (req, res, next) => {
+    try {
+      res.json({
+        success: true,
+        data: await service.updateStatus(req.params.id, req.body.status),
+      });
+    } catch (error) {
+      next(error);
     }
   },
 );

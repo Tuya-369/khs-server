@@ -23,4 +23,18 @@ export const managerOrdersQuerySchema = z.object({
   }),
 });
 
+export const updateOrderStatusSchema = z.object({
+  ...uuidParam.shape,
+  body: z.object({
+    status: z.enum([
+      "PENDING",
+      "SEARCHING",
+      "NOT_FOUND",
+      "COMPLETED",
+      "CONFIRMED",
+      "REJECTED",
+    ]),
+  }),
+});
+
 export const orderIdParamSchema = uuidParam;

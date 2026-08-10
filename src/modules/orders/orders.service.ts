@@ -1,4 +1,4 @@
-import type { Prisma } from "@prisma/client";
+import type { OrderStatus, Prisma } from "@prisma/client";
 import { AppError } from "../../errors/app-error";
 import { prisma } from "../../utils/prisma";
 
@@ -136,6 +136,19 @@ export class OrdersService {
       });
 
       return rejectedOrder;
+    });
+  }
+
+  async updateStatus(id: string, status: OrderStatus) {
+    const order = await prisma.merchOrder.findUnique({ where: { id } });
+    if (!order) {
+      throw new AppError(404, "Захиалга олдсонгүй.", [], "ORDER_NOT_FOUND");
+    }
+
+    return prisma.merchOrder.update({
+      where: { id },
+      data: { status },
+      include: { user: true, merchItem: true },
     });
   }
 

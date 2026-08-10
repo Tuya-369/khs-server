@@ -111,6 +111,15 @@ export class RequestsController {
     }
   }
 
+  async claim(req: Request, res: Response, next: NextFunction) {
+    try {
+      const updated = await service.claim(req.params.id, req.user!.userId);
+      res.status(200).json({ success: true, data: updated });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async markRead(req: Request, res: Response, next: NextFunction) {
     try {
       await service.markAsRead(req.params.id);

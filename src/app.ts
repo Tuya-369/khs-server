@@ -10,6 +10,7 @@ import requestRoutes from "./modules/requests/requests.routes";
 import merchRoutes from "./modules/merch/merch.routes";
 import orderRoutes from "./modules/orders/orders.routes";
 import dashboardRoutes from "./modules/dashboard/dashboard.routes";
+import calendarRoutes from "./modules/calendar/calendar.routes";
 import { errorMiddleware } from "./middlewares/error.middleware";
 
 const app = express();
@@ -77,6 +78,7 @@ app.use("/api/requests", requestRoutes);
 app.use("/api/merch", merchRoutes);
 app.use("/api/merch-orders", orderRoutes);
 app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/calendar", calendarRoutes);
 
 app.use(errorMiddleware);
 

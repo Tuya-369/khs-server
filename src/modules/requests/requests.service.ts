@@ -15,6 +15,14 @@ type RequestFilters = {
   limit?: number | string;
 };
 
+const requestDetailsInclude = {
+  driver: true,
+  vehicle: true,
+  part: true,
+  requestParts: { include: { part: true } },
+  images: true,
+} satisfies Prisma.RepairRequestInclude;
+
 export class RequestsService {
   async getDriverFormOptions() {
     const [vehicles, globalParts] = await Promise.all([
@@ -118,19 +126,14 @@ export class RequestsService {
 
     const whereClause: Prisma.RepairRequestWhereInput = {};
     if (status) whereClause.status = status;
+    else whereClause.status = { not: "COMPLETED" };
     if (isReadByAdmin !== undefined)
       whereClause.isReadByAdmin = isReadByAdmin === "true";
 
     const [items, total] = await prisma.$transaction([
       prisma.repairRequest.findMany({
         where: whereClause,
-        include: {
-          driver: true,
-          vehicle: true,
-          part: true,
-          requestParts: { include: { part: true } },
-          images: true,
-        },
+        include: requestDetailsInclude,
         skip,
         take: Number(limit),
         orderBy: { createdAt: "desc" },
@@ -161,6 +164,25 @@ export class RequestsService {
     return prisma.repairRequest.update({
       where: { id },
       data: { status },
+      include: requestDetailsInclude,
+    });
+  }
+
+  async claim(id: string, adminId: string) {
+    const request = await prisma.repairRequest.findUnique({
+      where: { id },
+      select: { status: true, assignedAdminId: true },
+    });
+
+    if (!request) throw new AppError(404, "Захиалга олдсонгүй.");
+    if (request.status !== "PENDING" || request.assignedAdminId) {
+      throw new AppError(409, "Энэ захиалгыг өөр хэрэглэгч авсан байна.");
+    }
+
+    return prisma.repairRequest.update({
+      where: { id },
+      data: { assignedAdminId: adminId, status: "SEARCHING" },
+      include: requestDetailsInclude,
     });
   }
 

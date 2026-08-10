@@ -34,7 +34,7 @@ router.get("/my", authenticate, authorize("DRIVER"), controller.getMy);
 router.get(
   "/",
   authenticate,
-  authorize("ADMIN"),
+  authorize("ADMIN", "ADMIN_PANEL"),
   validate(getAllRequestsSchema),
   controller.getAll,
 );
@@ -51,6 +51,13 @@ router.patch(
   authorize("ADMIN"),
   validate(updateRequestStatusSchema),
   controller.updateStatus,
+);
+router.patch(
+  "/:id/claim",
+  authenticate,
+  authorize("ADMIN"),
+  validate(requestIdParamSchema),
+  controller.claim,
 );
 router.patch(
   "/:id/read",
