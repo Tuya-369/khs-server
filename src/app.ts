@@ -3,7 +3,6 @@ import cors from "cors";
 import helmet from "helmet";
 import cookieParser from "cookie-parser";
 import rateLimit from "express-rate-limit";
-import path from "path";
 
 import authRoutes from "./modules/auth/auth.routes";
 import requestRoutes from "./modules/requests/requests.routes";
@@ -25,13 +24,29 @@ const corsWhitelist = (process.env.CORS_WHITELIST || "http://localhost:3000")
   .map((origin) => origin.trim().replace(/\/$/, ""))
   .filter(Boolean);
 
+const normalizeCorsOrigin = (origin: string) =>
+  origin.trim().replace(/\/$/, "");
+
+const corsWhitelistSet = new Set(
+  (process.env.CORS_WHITELIST || "http://localhost:3000")
+    .split(",")
+    .map(normalizeCorsOrigin)
+    .filter(Boolean),
+);
+
 app.set("trust proxy", true);
 
 app.use(helmet());
 app.use(
   cors({
     origin(origin, callback) {
-      if (!origin || corsWhitelist.includes(origin.replace(/\/$/, ""))) {
+      if (!origin) {
+        callback(null, true);
+        return;
+      }
+
+      const normalizedOrigin = normalizeCorsOrigin(origin);
+      if (corsWhitelistSet.has(normalizedOrigin)) {
         callback(null, true);
         return;
       }
@@ -44,7 +59,6 @@ app.use(
 app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: true, limit: "1mb" }));
 app.use(cookieParser());
-app.use("/uploads", express.static(path.resolve(process.cwd(), "uploads")));
 
 const limiter = rateLimit({
   windowMs: toInt(process.env.API_RATE_LIMIT_WINDOW_MS, 15 * 60 * 1000),

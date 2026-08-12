@@ -32,7 +32,7 @@ export class RequestsController {
       const oversizedSkipped = files.length - allowedFiles.length;
 
       const uploadResults = await Promise.allSettled(
-        allowedFiles.map((file) => uploadToCloudinary(file.path)),
+        allowedFiles.map((file) => uploadToCloudinary(file)),
       );
 
       const imageUrls = uploadResults

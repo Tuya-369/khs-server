@@ -1,10 +1,5 @@
 import multer from "multer";
-import fs from "fs";
-import path from "path";
 import { AppError } from "../errors/app-error";
-
-const uploadDir = path.resolve(process.cwd(), "uploads", "tmp");
-fs.mkdirSync(uploadDir, { recursive: true });
 
 const hardMaxFileSizeMb = Number(process.env.IMAGE_HARD_MAX_SIZE_MB || "20");
 const maxFileSizeBytes =
@@ -21,18 +16,8 @@ const allowedMimeTypes = new Set([
   "image/heif",
 ]);
 
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => {
-    cb(null, uploadDir);
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    cb(null, `${uniqueSuffix}-${file.originalname}`);
-  },
-});
-
 export const upload = multer({
-  storage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: maxFileSizeBytes },
   fileFilter: (req, file, cb) => {
     if (allowedMimeTypes.has(file.mimetype.toLowerCase())) {

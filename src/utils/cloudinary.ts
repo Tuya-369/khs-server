@@ -1,6 +1,4 @@
 import { v2 as cloudinary } from "cloudinary";
-import fs from "fs";
-import path from "path";
 import { logger } from "./logger";
 
 cloudinary.config({
@@ -9,42 +7,82 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-const removeLocalFile = (filePath: string) => {
-  try {
-    if (fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath);
-    }
-  } catch (error) {
-    logger.warn("Local temp file delete error", { filePath, error });
-  }
-};
+const cloudinaryUploadOptions = {
+  folder: "fleet_repairs",
+  resource_type: "image",
+  transformation: [
+    {
+      width: 1600,
+      crop: "limit",
+      quality: "auto:good",
+      fetch_format: "auto",
+    },
+  ],
+} as const;
 
 export const uploadToCloudinary = async (
-  filePath: string,
+  file: Express.Multer.File | { buffer: Buffer; originalname?: string },
 ): Promise<string | null> => {
-  try {
-    if (!process.env.CLOUDINARY_CLOUD_NAME) {
-      const fileName = path.basename(filePath);
-      return `/uploads/tmp/${fileName}`;
-    }
+  const requiredEnv = [
+    process.env.CLOUDINARY_CLOUD_NAME,
+    process.env.CLOUDINARY_API_KEY,
+    process.env.CLOUDINARY_API_SECRET,
+  ];
 
-    const result = await cloudinary.uploader.upload(filePath, {
-      folder: "fleet_repairs",
-      resource_type: "image",
-      transformation: [
-        {
-          width: 1600,
-          crop: "limit",
-          quality: "auto:good",
-          fetch_format: "auto",
-        },
-      ],
-    });
-    removeLocalFile(filePath);
+  if (requiredEnv.some((value) => !value)) {
+    logger.error(
+      "Cloudinary upload skipped because required env vars are not configured.",
+      {
+        cloudName: !!process.env.CLOUDINARY_CLOUD_NAME,
+        apiKey: !!process.env.CLOUDINARY_API_KEY,
+        apiSecret: !!process.env.CLOUDINARY_API_SECRET,
+      },
+    );
+    return null;
+  }
+
+  if (!file?.buffer || file.buffer.length === 0) {
+    logger.error(
+      "Cloudinary upload skipped because the file buffer is empty.",
+      {
+        fileName: file?.originalname,
+      },
+    );
+    return null;
+  }
+
+  try {
+    const result = await new Promise<{ secure_url: string }>(
+      (resolve, reject) => {
+        const uploadStream = cloudinary.uploader.upload_stream(
+          cloudinaryUploadOptions,
+          (error, uploaded) => {
+            if (error) {
+              reject(error);
+              return;
+            }
+
+            if (!uploaded?.secure_url) {
+              reject(
+                new Error("Cloudinary upload succeeded without a secure_url."),
+              );
+              return;
+            }
+
+            resolve(uploaded as { secure_url: string });
+          },
+        );
+
+        uploadStream.end(file.buffer);
+      },
+    );
+
     return result.secure_url;
   } catch (error) {
-    logger.error("Cloudinary upload error", { filePath, error });
-    removeLocalFile(filePath);
+    logger.error("Cloudinary upload error", {
+      fileName: file?.originalname,
+      error,
+    });
     return null;
   }
 };

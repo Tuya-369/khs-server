@@ -126,7 +126,6 @@ export class RequestsService {
 
     const whereClause: Prisma.RepairRequestWhereInput = {};
     if (status) whereClause.status = status;
-    else whereClause.status = { not: "COMPLETED" };
     if (isReadByAdmin !== undefined)
       whereClause.isReadByAdmin = isReadByAdmin === "true";
 
@@ -161,6 +160,19 @@ export class RequestsService {
   }
 
   async updateStatus(id: string, status: RequestStatus) {
+    const request = await prisma.repairRequest.findUnique({
+      where: { id },
+      select: { status: true },
+    });
+
+    if (!request) throw new AppError(404, "Захиалга олдсонгүй.");
+    if (request.status === "COMPLETED") {
+      throw new AppError(
+        409,
+        "Гүйцэтгэсэн захиалгыг цаашид өөрчлөх боломжгүй.",
+      );
+    }
+
     return prisma.repairRequest.update({
       where: { id },
       data: { status },

@@ -97,7 +97,9 @@ export class AuthService {
   }
 
   private issueAccessToken(userId: string, role: string): string {
-    return jwt.sign({ userId, role }, this.getAccessSecret());
+    return jwt.sign({ userId, role }, this.getAccessSecret(), {
+      expiresIn: "3h",
+    });
   }
 
   private issueRefreshToken(userId: string): string {
