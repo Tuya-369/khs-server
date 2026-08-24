@@ -650,7 +650,7 @@ async function main() {
       category: "giftcard",
       description: "Петровис шатахууны талон",
       longDescription: "Петровисийн бүх салбараар үйлчлүүлэх шатахууны талон.",
-      price: 10000, // Эхлэх суурь үнэ
+      price: 10000,
       stock: 100,
       sizes: ["One Size"],
       colors: [],
@@ -698,7 +698,7 @@ async function main() {
         "https://res.cloudinary.com/hfroefns/image/upload/v1786327257/12_d8ed7h.png",
     },
     {
-      title: "Интерном Элхийн Бичиг",
+      title: "Интерном Эрхийн Бичиг",
       category: "giftcard",
       description: "Интерном номын дэлгүүрийн ваучер 30,000₮",
       longDescription:
