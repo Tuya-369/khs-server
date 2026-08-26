@@ -76,7 +76,20 @@ export class AuthService {
   }
 
   private normalizePhone(value: unknown): string {
-    return typeof value === "string" ? value.trim() : "";
+    if (typeof value !== "string") return "";
+
+    const digits = value.replace(/\D/g, "");
+    if (!digits) return "";
+
+    // Accept common Mongolia formats and keep canonical local 8-digit number.
+    if (digits.length === 11 && digits.startsWith("976")) {
+      return digits.slice(3);
+    }
+    if (digits.length === 9 && digits.startsWith("0")) {
+      return digits.slice(1);
+    }
+
+    return digits;
   }
 
   private maskPhone(phoneNumber: string): string {
@@ -160,8 +173,8 @@ export class AuthService {
   private async sendOtp(phoneNumber: string, purpose: OtpPurpose) {
     const formattedPhone = this.normalizePhone(phoneNumber);
 
-    if (!formattedPhone) {
-      throw new AppError(400, "Утасны дугаар хоосон байна.");
+    if (!formattedPhone || !/^\d{8}$/.test(formattedPhone)) {
+      throw new AppError(400, "Утасны дугаар буруу байна.");
     }
 
     const now = new Date();
@@ -187,25 +200,15 @@ export class AuthService {
       );
     }
 
-    const randomCode = Math.floor(100000 + Math.random() * 900000).toString();
-    const expiresAt = new Date(Date.now() + this.otpExpiresInMs);
-
+    const randomCode = Math.floor(Math.random() * 10000)
+      .toString()
+      .padStart(4, "0");
     const codeHash = await bcrypt.hash(randomCode, 10);
-
-    await prisma.otpVerification.upsert({
-      where: { phoneNumber: formattedPhone },
-      update: { code: codeHash, purpose, expiresAt, usedAt: null },
-      create: {
-        phoneNumber: formattedPhone,
-        code: codeHash,
-        purpose,
-        expiresAt,
-      },
-    });
+    const expiresAt = new Date(Date.now() + this.otpExpiresInMs);
 
     const endpoint = "https://api-text.callpro.mn/v1/sms/send";
     const apiKey = process.env.CALLPRO_API_KEY;
-    const senderNumber = "72723355";
+    const senderNumber = process.env.CALLPRO_SENDER || "72723355";
 
     const smsText = `Таны баталгаажуулах код: ${randomCode}`;
 
@@ -223,7 +226,7 @@ export class AuthService {
     }
 
     try {
-      await axios.post(
+      const response = await axios.post(
         endpoint,
         {
           from: senderNumber,
@@ -238,6 +241,25 @@ export class AuthService {
           },
         },
       );
+
+      logger.info("SMS provider response", {
+        status: response.status,
+        body:
+          typeof response.data === "string"
+            ? response.data
+            : JSON.stringify(response.data),
+      });
+
+      await prisma.otpVerification.upsert({
+        where: { phoneNumber: formattedPhone },
+        update: { code: codeHash, purpose, expiresAt, usedAt: null },
+        create: {
+          phoneNumber: formattedPhone,
+          code: codeHash,
+          purpose,
+          expiresAt,
+        },
+      });
     } catch (error) {
       const response = axios.isAxiosError(error) ? error.response : undefined;
       const providerMessage =
@@ -514,9 +536,18 @@ export class AuthService {
 
   async login(data: LoginPayload): Promise<LoginChallengeResult> {
     const identifier = String(data.identifier || data.sapId || "").trim();
+    const normalizedIdentifierPhone = this.normalizePhone(identifier);
+    const phoneCandidates =
+      normalizedIdentifierPhone && normalizedIdentifierPhone !== identifier
+        ? [identifier, normalizedIdentifierPhone]
+        : [identifier];
+
     const user = await prisma.user.findFirst({
       where: {
-        OR: [{ sapId: identifier }, { phoneNumber: identifier }],
+        OR: [
+          { sapId: identifier },
+          ...phoneCandidates.map((value) => ({ phoneNumber: value })),
+        ],
       },
     });
     if (!user || !(await bcrypt.compare(data.password, user.passwordHash))) {

@@ -1,5 +1,16 @@
 import { z } from "zod";
 
+const phoneNumberSchema = z
+  .string()
+  .trim()
+  .transform((value) => value.replace(/\D/g, ""))
+  .transform((value) => {
+    if (value.length === 11 && value.startsWith("976")) return value.slice(3);
+    if (value.length === 9 && value.startsWith("0")) return value.slice(1);
+    return value;
+  })
+  .refine((value) => /^\d{8}$/.test(value), "Утасны дугаар буруу байна.");
+
 const sapIdSchema = z.preprocess((value) => {
   if (typeof value !== "string") return value;
   const trimmed = value.trim();
@@ -22,7 +33,7 @@ export const registerSchema = z.object({
       firstName: z.string().min(2, "Нэрээ оруулна уу."),
       lastName: z.string().min(2, "Овогоо оруулна уу."),
       ProjectName: projectNameSchema,
-      phoneNumber: z.string().min(8, "Утасны дугаар буруу байна."),
+      phoneNumber: phoneNumberSchema,
       password: z.string().min(6, "Нууц үг хамгийн багадаа 6 тэмдэгт байна."),
       confirmPassword: z.string().min(1, "Нууц үгээ давтаж оруулна уу."),
     })
@@ -56,18 +67,14 @@ export const verifyOtpSchema = z.object({
     code: z
       .string()
       .trim()
-      .regex(/^\d{6}$/, "OTP код 6 оронтой тоо байна."),
+      .regex(/^\d{4}$/, "OTP код 4 оронтой тоо байна."),
   }),
 });
 
-const phoneNumberSchema = z
-  .string()
-  .trim()
-  .min(8, "Утасны дугаар буруу байна.");
 const otpCodeSchema = z
   .string()
   .trim()
-  .regex(/^\d{6}$/, "OTP код 6 оронтой тоо байна.");
+  .regex(/^\d{4}$/, "OTP код 4 оронтой тоо байна.");
 
 export const forgotPasswordSchema = z.object({
   body: z.object({ phoneNumber: phoneNumberSchema }),
@@ -106,7 +113,7 @@ export const createUserByAdminSchema = z.object({
     firstName: z.string().min(2, "Нэрээ оруулна уу."),
     lastName: z.string().min(2, "Овогоо оруулна уу."),
     ProjectName: projectNameSchema,
-    phoneNumber: z.string().min(8, "Утасны дугаар буруу байна."),
+    phoneNumber: phoneNumberSchema,
     password: z.string().min(6, "Нууц үг хамгийн багадаа 6 тэмдэгт байна."),
     role: z.enum([
       "ADMIN",
@@ -124,7 +131,7 @@ export const updateMeSchema = z.object({
       firstName: z.string().min(2, "Нэрээ оруулна уу.").optional(),
       lastName: z.string().min(2, "Овогоо оруулна уу.").optional(),
       ProjectName: projectNameSchema.optional(),
-      phoneNumber: z.string().min(8, "Утасны дугаар буруу байна.").optional(),
+      phoneNumber: phoneNumberSchema.optional(),
     })
     .refine(
       (value) =>
