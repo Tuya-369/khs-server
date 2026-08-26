@@ -228,7 +228,12 @@ export class AuthService {
           debugCode: randomCode,
         } satisfies SendOtpResult;
       }
-      throw new AppError(500, "CALLPRO_API_KEY тохируулаагүй байна.");
+      throw new AppError(
+        503,
+        "SMS үйлчилгээ түр ажиллахгүй байна. Системийн тохиргоог шалгана уу.",
+        [],
+        "SMS_PROVIDER_NOT_CONFIGURED",
+      );
     }
 
     try {

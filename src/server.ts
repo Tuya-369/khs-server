@@ -7,6 +7,8 @@ const requiredProductionVariables = [
   "DATABASE_URL",
   "JWT_ACCESS_SECRET",
   "JWT_REFRESH_SECRET",
+  "CALLPRO_API_KEY",
+  "CALLPRO_SENDER",
 ];
 
 if (process.env.NODE_ENV === "production") {
