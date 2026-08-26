@@ -126,21 +126,10 @@ export const createUserByAdminSchema = z.object({
 });
 
 export const updateMeSchema = z.object({
-  body: z
-    .object({
-      firstName: z.string().min(2, "Нэрээ оруулна уу.").optional(),
-      lastName: z.string().min(2, "Овогоо оруулна уу.").optional(),
-      ProjectName: projectNameSchema.optional(),
-      phoneNumber: phoneNumberSchema.optional(),
-    })
-    .refine(
-      (value) =>
-        value.firstName !== undefined ||
-        value.lastName !== undefined ||
-        value.ProjectName !== undefined ||
-        value.phoneNumber !== undefined,
-      {
-        message: "Шинэчлэх дор хаяж нэг талбар оруулна уу.",
-      },
-    ),
+  body: z.object({
+    firstName: z.string().min(2, "Нэрээ оруулна уу.").optional(),
+    lastName: z.string().min(2, "Овогоо оруулна уу.").optional(),
+    ProjectName: projectNameSchema.optional(),
+    phoneNumber: phoneNumberSchema.optional(),
+  }),
 });

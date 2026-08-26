@@ -173,7 +173,11 @@ export class AuthController {
         throw new AppError(401, "Нэвтрэлт шаардлагатай.", [], "UNAUTHORIZED");
       }
 
-      const user = await authService.updateMe(req.user.userId, req.body);
+      const user = await authService.updateMe(
+        req.user.userId,
+        req.body,
+        req.file,
+      );
       res.status(200).json({ success: true, data: { user } });
     } catch (error) {
       next(error);

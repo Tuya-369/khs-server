@@ -53,6 +53,8 @@ model User {
   firstName     String
   lastName      String
   phoneNumber   String
+  profileImage  String?
+  profileImagePublicId String?
   ProjectName   ProjectName    @default(UG)
   passwordHash  String
   role          Role           @default(EMPLOYEE)

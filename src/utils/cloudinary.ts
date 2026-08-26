@@ -20,9 +20,17 @@ const cloudinaryUploadOptions = {
   ],
 } as const;
 
-export const uploadToCloudinary = async (
-  file: Express.Multer.File | { buffer: Buffer; originalname?: string },
-): Promise<string | null> => {
+const profileImageUploadOptions = {
+  folder: "khs/profile-images",
+  resource_type: "image",
+} as const;
+
+type CloudinaryUploadedAsset = {
+  secure_url: string;
+  public_id: string;
+};
+
+const isCloudinaryConfigured = (): boolean => {
   const requiredEnv = [
     process.env.CLOUDINARY_CLOUD_NAME,
     process.env.CLOUDINARY_API_KEY,
@@ -38,8 +46,17 @@ export const uploadToCloudinary = async (
         apiSecret: !!process.env.CLOUDINARY_API_SECRET,
       },
     );
-    return null;
+    return false;
   }
+
+  return true;
+};
+
+const uploadBufferToCloudinary = async (
+  file: Express.Multer.File | { buffer: Buffer; originalname?: string },
+  options: Record<string, unknown>,
+): Promise<CloudinaryUploadedAsset | null> => {
+  if (!isCloudinaryConfigured()) return null;
 
   if (!file?.buffer || file.buffer.length === 0) {
     logger.error(
@@ -52,24 +69,26 @@ export const uploadToCloudinary = async (
   }
 
   try {
-    const result = await new Promise<{ secure_url: string }>(
+    const result = await new Promise<CloudinaryUploadedAsset>(
       (resolve, reject) => {
         const uploadStream = cloudinary.uploader.upload_stream(
-          cloudinaryUploadOptions,
+          options,
           (error, uploaded) => {
             if (error) {
               reject(error);
               return;
             }
 
-            if (!uploaded?.secure_url) {
+            if (!uploaded?.secure_url || !uploaded.public_id) {
               reject(
-                new Error("Cloudinary upload succeeded without a secure_url."),
+                new Error(
+                  "Cloudinary upload succeeded without required fields.",
+                ),
               );
               return;
             }
 
-            resolve(uploaded as { secure_url: string });
+            resolve(uploaded as CloudinaryUploadedAsset);
           },
         );
 
@@ -77,12 +96,55 @@ export const uploadToCloudinary = async (
       },
     );
 
-    return result.secure_url;
+    return result;
   } catch (error) {
     logger.error("Cloudinary upload error", {
       fileName: file?.originalname,
       error,
     });
     return null;
+  }
+};
+
+export const uploadToCloudinary = async (
+  file: Express.Multer.File | { buffer: Buffer; originalname?: string },
+): Promise<string | null> => {
+  const uploaded = await uploadBufferToCloudinary(
+    file,
+    cloudinaryUploadOptions,
+  );
+  return uploaded?.secure_url || null;
+};
+
+export const uploadProfileImageToCloudinary = async (
+  file: Express.Multer.File,
+): Promise<{ secureUrl: string; publicId: string } | null> => {
+  const uploaded = await uploadBufferToCloudinary(
+    file,
+    profileImageUploadOptions,
+  );
+  if (!uploaded) return null;
+
+  return {
+    secureUrl: uploaded.secure_url,
+    publicId: uploaded.public_id,
+  };
+};
+
+export const deleteImageFromCloudinary = async (
+  publicId: string,
+): Promise<boolean> => {
+  if (!publicId) return false;
+  if (!isCloudinaryConfigured()) return false;
+
+  try {
+    const result = await cloudinary.uploader.destroy(publicId, {
+      resource_type: "image",
+    });
+
+    return result.result === "ok" || result.result === "not found";
+  } catch (error) {
+    logger.error("Cloudinary delete error", { publicId, error });
+    return false;
   }
 };

@@ -5,6 +5,10 @@ import { OtpPurpose, Role } from "@prisma/client";
 import { AppError } from "../../errors/app-error";
 import { prisma } from "../../utils/prisma";
 import { logger } from "../../utils/logger";
+import {
+  deleteImageFromCloudinary,
+  uploadProfileImageToCloudinary,
+} from "../../utils/cloudinary";
 
 type SendOtpResult = {
   message: string;
@@ -57,6 +61,8 @@ type UpdateMePayload = {
   lastName?: string;
   ProjectName?: ProjectNameValue;
   phoneNumber?: string;
+  profileImage?: string | null;
+  profileImagePublicId?: string | null;
 };
 
 export class AuthService {
@@ -672,6 +678,7 @@ export class AuthService {
         lastName: true,
         ProjectName: true,
         phoneNumber: true,
+        profileImage: true,
         role: true,
         isActive: true,
         createdAt: true,
@@ -685,7 +692,20 @@ export class AuthService {
     return user;
   }
 
-  async updateMe(userId: string, data: UpdateMePayload) {
+  async updateMe(
+    userId: string,
+    data: UpdateMePayload,
+    profileImageFile?: Express.Multer.File,
+  ) {
+    const existingUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { profileImagePublicId: true },
+    });
+
+    if (!existingUser) {
+      throw new AppError(404, "Хэрэглэгч олдсонгүй.", [], "USER_NOT_FOUND");
+    }
+
     const updateData: UpdateMePayload = {};
 
     if (data.firstName !== undefined) updateData.firstName = data.firstName;
@@ -694,6 +714,23 @@ export class AuthService {
       updateData.ProjectName = data.ProjectName;
     if (data.phoneNumber !== undefined)
       updateData.phoneNumber = data.phoneNumber;
+
+    let uploadedProfileImagePublicId: string | null = null;
+    if (profileImageFile) {
+      const uploadedProfileImage =
+        await uploadProfileImageToCloudinary(profileImageFile);
+
+      if (!uploadedProfileImage) {
+        throw new AppError(
+          502,
+          "Профайл зураг upload хийхэд алдаа гарлаа. Дахин оролдоно уу.",
+        );
+      }
+
+      updateData.profileImage = uploadedProfileImage.secureUrl;
+      updateData.profileImagePublicId = uploadedProfileImage.publicId;
+      uploadedProfileImagePublicId = uploadedProfileImage.publicId;
+    }
 
     if (Object.keys(updateData).length === 0) {
       throw new AppError(400, "Шинэчлэх өгөгдөл хоосон байна.");
@@ -709,11 +746,29 @@ export class AuthService {
         lastName: true,
         ProjectName: true,
         phoneNumber: true,
+        profileImage: true,
         role: true,
         isActive: true,
         createdAt: true,
       },
     });
+
+    if (
+      uploadedProfileImagePublicId &&
+      existingUser.profileImagePublicId &&
+      existingUser.profileImagePublicId !== uploadedProfileImagePublicId
+    ) {
+      const deleted = await deleteImageFromCloudinary(
+        existingUser.profileImagePublicId,
+      );
+
+      if (!deleted) {
+        logger.warn("Failed to delete old profile image from Cloudinary.", {
+          userId,
+          publicId: existingUser.profileImagePublicId,
+        });
+      }
+    }
 
     return user;
   }

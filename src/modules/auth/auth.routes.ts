@@ -15,6 +15,7 @@ import {
 } from "./auth.validation";
 import { authenticate } from "../../middlewares/auth.middleware";
 import { authorize } from "../../middlewares/role.middleware";
+import { upload } from "../../middlewares/upload.middleware";
 
 const router = Router();
 const controller = new AuthController();
@@ -64,6 +65,7 @@ router.get("/me", authenticate, controller.me);
 router.patch(
   "/me",
   authenticate,
+  upload.single("profileImage"),
   validate(updateMeSchema),
   controller.updateMe,
 );
