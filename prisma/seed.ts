@@ -434,47 +434,6 @@ export const globalPartsData: PartCategory[] = [
 async function main() {
   const passwordHash = await bcrypt.hash("password123", 10);
 
-  await prisma.user.upsert({
-    where: { sapId: "SAP001" },
-    update: {},
-    create: {
-      sapId: "SAP001",
-      firstName: "Бат",
-      lastName: "Болд",
-      phoneNumber: "99112233",
-      passwordHash,
-      role: "ADMIN",
-    },
-  });
-
-  const driver = await prisma.user.upsert({
-    where: { sapId: "SAP002" },
-    update: {},
-    create: {
-      sapId: "SAP002",
-      firstName: "Ганзориг",
-      lastName: "Төмөр",
-      phoneNumber: "88112233",
-      passwordHash,
-      role: "DRIVER",
-    },
-  });
-
-  for (const [index, vehicle] of vehicles.entries()) {
-    await prisma.vehicle.upsert({
-      where: { plate: vehicle.plate },
-      update: {
-        name: vehicle.name,
-        type: vehicle.type,
-        department: vehicle.department,
-      },
-      create: {
-        ...vehicle,
-        assignedDriverId: index === 0 ? driver.id : undefined,
-      },
-    });
-  }
-
   for (const category of globalPartsData) {
     for (const part of category.parts) {
       const existingPart = await prisma.part.findFirst({
@@ -505,7 +464,7 @@ async function main() {
   const merchItems = [
     // --- MERCH & ELECTRONICS ---
     {
-      title: "T-shirt",
+      title: "Цамц",
       category: "merch",
       description: "брэндийн лого хэвлэлттэй",
       longDescription:
@@ -518,7 +477,7 @@ async function main() {
         "https://res.cloudinary.com/hfroefns/image/upload/v1782976073/b7a98308-42af-4142-80e5-50d0615b7134_kgvv1p.jpg",
     },
     {
-      title: "KHS Hoodie",
+      title: "Малгайтай цамц",
       category: "merch",
       description: "Цэвэр даавуун цамц, лого хэвлэлттэй",
       longDescription:
@@ -531,7 +490,7 @@ async function main() {
         "https://res.cloudinary.com/hfroefns/image/upload/v1782976073/3a98925c-2bc6-44a4-aad2-d04660f83387_kkdm3v.jpg",
     },
     {
-      title: "KHS Bag",
+      title: "KHS Цүнх",
       category: "merch",
       description: "Компанийн логотой цүнх",
       longDescription: "Том оврын компанийн логотой цүнх.",
@@ -543,7 +502,7 @@ async function main() {
         "https://res.cloudinary.com/hfroefns/image/upload/v1785743470/bag_gfrdoa.png",
     },
     {
-      title: "fliptop mug",
+      title: "Халуун хүйтэнээ хадгалдаг сав",
       category: "merch",
       description: "Stanley-ийн fliptop сав",
       longDescription:
@@ -556,7 +515,7 @@ async function main() {
         "https://res.cloudinary.com/hfroefns/image/upload/v1785743471/fliptop_sbl2zv.png",
     },
     {
-      title: "flip straw tubler",
+      title: "Халуун хүйтнээ хадгалдаг сав",
       category: "merch",
       description: "Stanley-ийн flip straw tubler",
       longDescription:
@@ -569,7 +528,7 @@ async function main() {
         "https://res.cloudinary.com/hfroefns/image/upload/v1785743471/Flip_straw_p2eclk.png",
     },
     {
-      title: "To go bottle",
+      title: "Халуун хүйтнээ хадгалдаг сав",
       category: "merch",
       description: "Stanley-ийн To go bottle загвар",
       longDescription:
@@ -582,7 +541,7 @@ async function main() {
         "https://res.cloudinary.com/hfroefns/image/upload/v1785743472/To_go_bottle_mzbec6.png",
     },
     {
-      title: "Travel mug",
+      title: "Халуун хүйтнээ хадгалдаг сав",
       category: "merch",
       description: "Stanley-ийн Travel mug",
       longDescription:
@@ -595,7 +554,7 @@ async function main() {
         "https://res.cloudinary.com/hfroefns/image/upload/v1785743471/travel_mug_hofoxu.png",
     },
     {
-      title: "Bose headphones",
+      title: "Чихэвч",
       category: "merch",
       description: "Bose-ийн чихэвч",
       longDescription: "Bose-ийн чихэвч загвар, өндөр чанартай дуугаралттай.",
@@ -607,7 +566,7 @@ async function main() {
         "https://res.cloudinary.com/hfroefns/image/upload/v1785743470/bose_headphone_dxrfl0.png",
     },
     {
-      title: "Sony headphones",
+      title: "Чихэвч",
       category: "merch",
       description: "Sony-ийн чихэвч",
       longDescription: "Sony-ийн чихэвч загвар, өндөр чанартай дуугаралттай.",
@@ -619,10 +578,11 @@ async function main() {
         "https://res.cloudinary.com/hfroefns/image/upload/v1785743471/sony_bprtpg.png",
     },
     {
-      title: "Wireless Speaker",
+      title: "Утасгүй спикер",
       category: "merch",
-      description: "Wireless Speaker",
-      longDescription: "Wireless Speaker загвар, өндөр чанартай дуугаралттай.",
+      description: "Утасгүй чанга яригч",
+      longDescription:
+        "Утасгүй чанга яригч загвар, өндөр чанартай дуугаралттай.",
       price: 160000,
       stock: 100,
       sizes: ["One Size"],
@@ -631,11 +591,11 @@ async function main() {
         "https://res.cloudinary.com/hfroefns/image/upload/v1785743471/speacker_mtvwj1.png",
     },
     {
-      title: "Tablet",
+      title: "Таблет",
       category: "merch",
-      description: "Tablet",
+      description: "Таблет",
       longDescription:
-        "Орчин үеийн загварын Tablet, өндөр чанартай материалаар хийгдсэн.",
+        "Орчин үеийн загварын таблет, өндөр чанартай материалаар хийгдсэн.",
       price: 830000,
       stock: 100,
       sizes: ["One Size"],
