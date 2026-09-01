@@ -1,4 +1,5 @@
 import { PrismaClient } from "@prisma/client";
+import bcrypt from "bcrypt";
 
 const prisma = new PrismaClient();
 export interface Vehicle {
@@ -431,6 +432,8 @@ export const globalPartsData: PartCategory[] = [
 ];
 
 async function main() {
+  const passwordHash = await bcrypt.hash("password123", 10);
+
   for (const category of globalPartsData) {
     for (const part of category.parts) {
       const existingPart = await prisma.part.findFirst({
@@ -669,16 +672,12 @@ async function main() {
     },
   ];
 
-  const merchSeedData = merchItems.map((merchItem) => {
-    const item = { ...merchItem };
-    delete item.category;
-    delete item.options;
-
-    return {
+  const merchSeedData = merchItems.map(
+    ({ category: _category, options: _options, ...item }) => ({
       ...item,
       isActive: true,
-    };
-  });
+    }),
+  );
 
   await prisma.merchItem.deleteMany();
   await prisma.merchItem.createMany({
