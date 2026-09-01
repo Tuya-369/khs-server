@@ -1,0 +1,20 @@
+import { z } from "zod";
+
+const feedbackIdSchema = z.object({
+  params: z.object({
+    id: z.string().uuid("ID буруу форматтай байна."),
+  }),
+});
+
+export const createFeedbackSchema = z.object({
+  body: z.object({
+    message: z.string().trim().min(1, "Санал хүсэлт хоосон байна.").max(1000),
+  }),
+});
+
+export const updateFeedbackStatusSchema = z.object({
+  ...feedbackIdSchema.shape,
+  body: z.object({
+    status: z.enum(["PENDING", "RESOLVED", "SUSPENDED"]),
+  }),
+});

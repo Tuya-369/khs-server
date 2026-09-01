@@ -10,6 +10,7 @@ import merchRoutes from "./modules/merch/merch.routes";
 import orderRoutes from "./modules/orders/orders.routes";
 import dashboardRoutes from "./modules/dashboard/dashboard.routes";
 import calendarRoutes from "./modules/calendar/calendar.routes";
+import feedbackRoutes from "./modules/feedback/feedback.routes";
 import { errorMiddleware } from "./middlewares/error.middleware";
 
 const app = express();
@@ -18,11 +19,6 @@ const toInt = (value: string | undefined, fallback: number): number => {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 };
-
-const corsWhitelist = (process.env.CORS_WHITELIST || "http://localhost:3000")
-  .split(",")
-  .map((origin) => origin.trim().replace(/\/$/, ""))
-  .filter(Boolean);
 
 const normalizeCorsOrigin = (origin: string) =>
   origin.trim().replace(/\/$/, "");
@@ -93,6 +89,7 @@ app.use("/api/merch", merchRoutes);
 app.use("/api/merch-orders", orderRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/calendar", calendarRoutes);
+app.use("/api/feedback", feedbackRoutes);
 
 app.use(errorMiddleware);
 

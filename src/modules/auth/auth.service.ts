@@ -81,6 +81,19 @@ export class AuthService {
     return trimmed.length > 0 ? trimmed : null;
   }
 
+  private normalizeName(value: string): string {
+    return value
+      .trim()
+      .split(/\s+/)
+      .map(
+        (word) =>
+          `${word.slice(0, 1).toLocaleUpperCase("mn-MN")}${word
+            .slice(1)
+            .toLocaleLowerCase("mn-MN")}`,
+      )
+      .join(" ");
+  }
+
   private normalizePhone(value: unknown): string {
     if (typeof value !== "string") return "";
 
@@ -343,8 +356,8 @@ export class AuthService {
       where: { phoneNumber },
       update: {
         sapId,
-        firstName: data.firstName,
-        lastName: data.lastName,
+        firstName: this.normalizeName(data.firstName),
+        lastName: this.normalizeName(data.lastName),
         ProjectName: data.ProjectName,
         passwordHash: await bcrypt.hash(data.password, 10),
         expiresAt: new Date(Date.now() + this.otpExpiresInMs),
@@ -352,8 +365,8 @@ export class AuthService {
       create: {
         phoneNumber,
         sapId,
-        firstName: data.firstName,
-        lastName: data.lastName,
+        firstName: this.normalizeName(data.firstName),
+        lastName: this.normalizeName(data.lastName),
         ProjectName: data.ProjectName,
         passwordHash: await bcrypt.hash(data.password, 10),
         expiresAt: new Date(Date.now() + this.otpExpiresInMs),
@@ -489,8 +502,8 @@ export class AuthService {
     return prisma.user.create({
       data: {
         sapId,
-        firstName: data.firstName,
-        lastName: data.lastName,
+        firstName: this.normalizeName(data.firstName),
+        lastName: this.normalizeName(data.lastName),
         ProjectName: data.ProjectName,
         phoneNumber: data.phoneNumber,
         passwordHash,
@@ -527,8 +540,8 @@ export class AuthService {
     return prisma.user.create({
       data: {
         sapId,
-        firstName: data.firstName,
-        lastName: data.lastName,
+        firstName: this.normalizeName(data.firstName),
+        lastName: this.normalizeName(data.lastName),
         ProjectName: data.ProjectName,
         phoneNumber: data.phoneNumber,
         passwordHash,
@@ -713,8 +726,10 @@ export class AuthService {
 
     const updateData: UpdateMePayload = {};
 
-    if (data.firstName !== undefined) updateData.firstName = data.firstName;
-    if (data.lastName !== undefined) updateData.lastName = data.lastName;
+    if (data.firstName !== undefined)
+      updateData.firstName = this.normalizeName(data.firstName);
+    if (data.lastName !== undefined)
+      updateData.lastName = this.normalizeName(data.lastName);
     if (data.ProjectName !== undefined)
       updateData.ProjectName = data.ProjectName;
     if (data.phoneNumber !== undefined)

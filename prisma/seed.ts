@@ -1,5 +1,4 @@
 import { PrismaClient } from "@prisma/client";
-import bcrypt from "bcrypt";
 
 const prisma = new PrismaClient();
 export interface Vehicle {
@@ -432,8 +431,6 @@ export const globalPartsData: PartCategory[] = [
 ];
 
 async function main() {
-  const passwordHash = await bcrypt.hash("password123", 10);
-
   for (const category of globalPartsData) {
     for (const part of category.parts) {
       const existingPart = await prisma.part.findFirst({
@@ -672,22 +669,25 @@ async function main() {
     },
   ];
 
-  for (const item of merchItems) {
-    const existing = await prisma.merchItem.findFirst({
-      where: { title: item.title },
-    });
+  const merchSeedData = merchItems.map((merchItem) => {
+    const item = { ...merchItem };
+    delete item.category;
+    delete item.options;
 
-    if (existing) {
-      await prisma.merchItem.update({
-        where: { id: existing.id },
-        data: item,
-      });
-    } else {
-      await prisma.merchItem.create({ data: item });
-    }
-  }
+    return {
+      ...item,
+      isActive: true,
+    };
+  });
 
-  console.log("Демо өгөгдөл амжилттай орлоо.");
+  await prisma.merchItem.deleteMany();
+  await prisma.merchItem.createMany({
+    data: merchSeedData,
+  });
+
+  console.log(
+    `Демо өгөгдөл амжилттай орлоо. (${merchSeedData.length} merch item)`,
+  );
 }
 
 main()

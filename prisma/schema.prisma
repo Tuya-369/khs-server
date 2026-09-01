@@ -13,6 +13,7 @@ enum Role {
   DRIVER
   TOKEN_MANAGER
   EMPLOYEE
+  HR
 }
 
 enum RequestStatus {
@@ -47,6 +48,12 @@ enum OtpPurpose {
   LOGIN
 }
 
+enum FeedbackStatus {
+  PENDING
+  RESOLVED
+  SUSPENDED
+}
+
 model User {
   id            String         @id @default(uuid())
   sapId         String?        @unique
@@ -70,6 +77,7 @@ model User {
   rejectedOrders MerchOrder[] @relation("RejectedOrders")
   refreshTokens RefreshToken[]
   notifications Notification[]
+  feedbacks     Feedback[]
 }
 
 model RefreshToken {
@@ -188,6 +196,19 @@ model Notification {
   message   String
   isRead    Boolean  @default(false)
   createdAt DateTime @default(now())
+}
+
+model Feedback {
+  id        String         @id @default(uuid())
+  userId    String
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  message   String
+  status    FeedbackStatus @default(PENDING)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  @@index([status, createdAt])
+  @@index([userId])
 }
 
 model OtpVerification {

@@ -8,5 +8,9 @@ services:
       - "5000:5000"
     environment:
       DATABASE_URL: "${DATABASE_URL}"
-      JWT_ACCESS_SECRET: "prod_access_secret"
-      JWT_REFRESH_SECRET: "prod_refresh_secret"
+      JWT_ACCESS_SECRET: "${JWT_ACCESS_SECRET}"
+      JWT_REFRESH_SECRET: "${JWT_REFRESH_SECRET}"
+      CALLPRO_API_KEY: "${CALLPRO_API_KEY}"
+      CALLPRO_SENDER: "${CALLPRO_SENDER}"
+      CORS_WHITELIST: "${CORS_WHITELIST}"
+      NODE_ENV: "production"
