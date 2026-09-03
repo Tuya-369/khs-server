@@ -54,6 +54,14 @@ enum FeedbackStatus {
   SUSPENDED
 }
 
+enum FeedbackCategory {
+  WORKPLACE
+  OPERATIONS
+  MANAGEMENT
+  COMPENSATION
+  OTHER
+}
+
 model User {
   id            String         @id @default(uuid())
   sapId         String?        @unique
@@ -202,12 +210,14 @@ model Feedback {
   id        String         @id @default(uuid())
   userId    String
   user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category  FeedbackCategory @default(OTHER)
   message   String
   status    FeedbackStatus @default(PENDING)
   createdAt DateTime       @default(now())
   updatedAt DateTime       @updatedAt
 
   @@index([status, createdAt])
+  @@index([category, createdAt])
   @@index([userId])
 }
 

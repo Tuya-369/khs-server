@@ -20,6 +20,7 @@ router.post(
       const feedback = await service.createFeedback(
         req.user!.userId,
         req.body.message,
+        req.body.category,
       );
       res.status(201).json({ success: true, data: feedback });
     } catch (error) {

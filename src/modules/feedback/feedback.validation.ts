@@ -8,6 +8,13 @@ const feedbackIdSchema = z.object({
 
 export const createFeedbackSchema = z.object({
   body: z.object({
+    category: z.enum([
+      "WORKPLACE",
+      "OPERATIONS",
+      "MANAGEMENT",
+      "COMPENSATION",
+      "OTHER",
+    ]),
     message: z.string().trim().min(1, "Санал хүсэлт хоосон байна.").max(1000),
   }),
 });

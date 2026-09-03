@@ -1,11 +1,15 @@
-import { FeedbackStatus } from "@prisma/client";
+import { FeedbackCategory, FeedbackStatus } from "@prisma/client";
 import { AppError } from "../../errors/app-error";
 import { prisma } from "../../utils/prisma";
 
 export class FeedbackService {
-  async createFeedback(userId: string, message: string) {
+  async createFeedback(
+    userId: string,
+    message: string,
+    category: FeedbackCategory,
+  ) {
     return prisma.feedback.create({
-      data: { userId, message },
+      data: { userId, message, category },
     });
   }
 
@@ -18,6 +22,7 @@ export class FeedbackService {
             lastName: true,
             sapId: true,
             phoneNumber: true,
+            ProjectName: true,
           },
         },
       },
