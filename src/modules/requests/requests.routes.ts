@@ -18,7 +18,7 @@ router.post(
   "/",
   authenticate,
   authorize("DRIVER"),
-  upload.array("images", 5),
+  upload.array("images", 2),
   validate(createRequestSchema),
   controller.create,
 );
