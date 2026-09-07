@@ -1,4 +1,4 @@
-import { PrismaClient } from "@prisma/client";
+import { Prisma, PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 export interface Vehicle {
@@ -463,7 +463,7 @@ async function main() {
     {
       title: "Цамц",
       category: "merch",
-      description: "брэндийн лого хэвлэлттэй",
+      description: "Брэндийн лого хэвлэлттэй",
       longDescription:
         "100% хөвөн даавуугаар хийгдсэн, компанийн лого урд талд хэвлэгдсэн энгийн загварын футболк.",
       price: 40000,
@@ -669,14 +669,12 @@ async function main() {
     },
   ];
 
-  const merchSeedData = merchItems.map((item) => ({
-    ...Object.fromEntries(
-      Object.entries(item).filter(
-        ([key]) => key !== "category" && key !== "options",
-      ),
-    ),
-    isActive: true,
-  }));
+  const merchSeedData: Prisma.MerchItemCreateManyInput[] = merchItems.map(
+    ({ category: _category, options: _options, ...item }) => ({
+      ...item,
+      isActive: true,
+    }),
+  );
 
   await prisma.merchItem.deleteMany();
   await prisma.merchItem.createMany({
