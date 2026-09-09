@@ -11,21 +11,27 @@ type CreateOrderData = {
 
 export class OrdersService {
   async createOrder(userId: string, data: CreateOrderData) {
-    const item = await prisma.merchItem.findUnique({
-      where: { id: data.merchItemId },
-    });
-    if (!item || !item.isActive || item.stock < data.qty) {
-      throw new AppError(
-        400,
-        "Бараа олдсонгүй эсвэл үлдэгдэл хүрэлцэхгүй байна.",
-      );
-    }
-
     return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      await tx.merchItem.update({
-        where: { id: item.id },
+      const item = await tx.merchItem.findUnique({
+        where: { id: data.merchItemId },
+        select: { colors: true },
+      });
+
+      const stockUpdate = await tx.merchItem.updateMany({
+        where: {
+          id: data.merchItemId,
+          isActive: true,
+          stock: { gte: data.qty },
+        },
         data: { stock: { decrement: data.qty } },
       });
+
+      if (!item || stockUpdate.count === 0) {
+        throw new AppError(
+          400,
+          "Бараа олдсонгүй эсвэл үлдэгдэл хүрэлцэхгүй байна.",
+        );
+      }
 
       return tx.merchOrder.create({
         data: {
@@ -56,7 +62,16 @@ export class OrdersService {
     return prisma.merchOrder.findMany({
       where,
       include: {
-        user: true,
+        user: {
+          select: {
+            id: true,
+            sapId: true,
+            firstName: true,
+            lastName: true,
+            phoneNumber: true,
+            role: true,
+          },
+        },
         merchItem: true,
         confirmedBy: {
           select: {
@@ -100,7 +115,19 @@ export class OrdersService {
         confirmedAt: new Date(),
         confirmedById: managerId,
       },
-      include: { user: true, merchItem: true },
+      include: {
+        user: {
+          select: {
+            id: true,
+            sapId: true,
+            firstName: true,
+            lastName: true,
+            phoneNumber: true,
+            role: true,
+          },
+        },
+        merchItem: true,
+      },
     });
   }
 
@@ -124,7 +151,19 @@ export class OrdersService {
           rejectedAt: new Date(),
           rejectedById: managerId,
         },
-        include: { user: true, merchItem: true },
+        include: {
+          user: {
+            select: {
+              id: true,
+              sapId: true,
+              firstName: true,
+              lastName: true,
+              phoneNumber: true,
+              role: true,
+            },
+          },
+          merchItem: true,
+        },
       });
 
       await tx.notification.create({
@@ -148,7 +187,19 @@ export class OrdersService {
     return prisma.merchOrder.update({
       where: { id },
       data: { status },
-      include: { user: true, merchItem: true },
+      include: {
+        user: {
+          select: {
+            id: true,
+            sapId: true,
+            firstName: true,
+            lastName: true,
+            phoneNumber: true,
+            role: true,
+          },
+        },
+        merchItem: true,
+      },
     });
   }
 

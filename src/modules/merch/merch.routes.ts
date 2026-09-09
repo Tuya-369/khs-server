@@ -6,9 +6,34 @@ import { authorize } from "../../middlewares/role.middleware";
 const router = Router();
 const service = new MerchService();
 
+const toPositiveInteger = (
+  value: unknown,
+  fallback: number,
+  maximum: number,
+) => {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0
+    ? Math.min(parsed, maximum)
+    : fallback;
+};
+
 router.get("/", async (req, res, next) => {
   try {
-    res.json({ success: true, data: await service.getAll() });
+    const result = await service.getAll({
+      page: toPositiveInteger(req.query.page, 1, 1000000),
+      limit: toPositiveInteger(req.query.limit, 24, 100),
+    });
+    res.set("Cache-Control", "public, max-age=60, s-maxage=300");
+    res.json({
+      success: true,
+      data: result.items,
+      pagination: {
+        total: result.total,
+        page: result.page,
+        limit: result.limit,
+        totalPages: Math.ceil(result.total / result.limit),
+      },
+    });
   } catch (e) {
     next(e);
   }

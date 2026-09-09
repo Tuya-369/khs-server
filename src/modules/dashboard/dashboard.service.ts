@@ -2,23 +2,21 @@ import { prisma } from "../../utils/prisma";
 
 export class DashboardService {
   async getAdminSummary() {
-    const totalRequests = await prisma.repairRequest.count();
-    const pendingRequests = await prisma.repairRequest.count({
-      where: { status: "PENDING" },
-    });
-    const totalVehicles = await prisma.vehicle.count();
+    const [totalRequests, pendingRequests, totalVehicles] = await Promise.all([
+      prisma.repairRequest.count(),
+      prisma.repairRequest.count({ where: { status: "PENDING" } }),
+      prisma.vehicle.count(),
+    ]);
 
     return { totalRequests, pendingRequests, totalVehicles };
   }
 
   async getTokenSummary() {
-    const totalOrders = await prisma.merchOrder.count();
-    const newOrders = await prisma.merchOrder.count({
-      where: { status: "NEW" },
-    });
-    const lowStockItems = await prisma.merchItem.count({
-      where: { stock: { lt: 5 } },
-    });
+    const [totalOrders, newOrders, lowStockItems] = await Promise.all([
+      prisma.merchOrder.count(),
+      prisma.merchOrder.count({ where: { status: "NEW" } }),
+      prisma.merchItem.count({ where: { stock: { lt: 5 } } }),
+    ]);
 
     return { totalOrders, newOrders, lowStockItems };
   }
