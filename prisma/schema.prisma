@@ -63,29 +63,30 @@ enum FeedbackCategory {
 }
 
 model User {
-  id            String         @id @default(uuid())
-  sapId         String?        @unique
-  firstName     String
-  lastName      String
-  phoneNumber   String
-  profileImage  String?
+  id                   String          @id @default(uuid())
+  sapId                String?         @unique
+  firstName            String
+  lastName             String
+  phoneNumber          String          @unique
+  profileImage         String?
   profileImagePublicId String?
-  ProjectName   ProjectName    @default(UG)
-  passwordHash  String
-  role          Role           @default(EMPLOYEE)
-  isActive      Boolean        @default(true)
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  vehicles      Vehicle[]
-  requests      RepairRequest[]
-  assignedRequests RepairRequest[] @relation("AssignedRequests")
-  orders        MerchOrder[]
-  calendarNotes CalendarNote[]
-  confirmedOrders MerchOrder[] @relation("ConfirmedOrders")
-  rejectedOrders MerchOrder[] @relation("RejectedOrders")
-  refreshTokens RefreshToken[]
-  notifications Notification[]
-  feedbacks     Feedback[]
+  ProjectName          ProjectName     @default(UG)
+  passwordHash         String
+  role                 Role            @default(EMPLOYEE)
+  isActive             Boolean         @default(true)
+  isWhitelisted        Boolean         @default(false)
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
+  vehicles             Vehicle[]
+  requests             RepairRequest[]
+  assignedRequests     RepairRequest[] @relation("AssignedRequests")
+  orders               MerchOrder[]
+  calendarNotes        CalendarNote[]
+  confirmedOrders      MerchOrder[]    @relation("ConfirmedOrders")
+  rejectedOrders       MerchOrder[]    @relation("RejectedOrders")
+  refreshTokens        RefreshToken[]
+  notifications        Notification[]
+  feedbacks            Feedback[]
 }
 
 model RefreshToken {
@@ -241,6 +242,14 @@ model PendingRegistration {
   ProjectName ProjectName
   passwordHash String
   expiresAt   DateTime
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+}
+
+model Whitelist {
+  id          String      @id @default(uuid())
+  phoneNumber String      @unique
+  projectName ProjectName
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 }

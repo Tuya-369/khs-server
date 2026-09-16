@@ -32,7 +32,6 @@ export const registerSchema = z.object({
       sapId: sapIdSchema,
       firstName: z.string().min(2, "Нэрээ оруулна уу."),
       lastName: z.string().min(2, "Овогоо оруулна уу."),
-      ProjectName: projectNameSchema,
       phoneNumber: phoneNumberSchema,
       password: z.string().min(6, "Нууц үг хамгийн багадаа 6 тэмдэгт байна."),
       confirmPassword: z.string().min(1, "Нууц үгээ давтаж оруулна уу."),
