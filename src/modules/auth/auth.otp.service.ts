@@ -64,11 +64,14 @@ export class AuthOtpService {
       };
     }
 
+    const endpoint = getRequiredEnv("CALLPRO_API_URL");
+    const senderNumber = getRequiredEnv("CALLPRO_SENDER");
+
     try {
       const response = await axios.post(
-        getRequiredEnv("CALLPRO_API_URL"),
+        endpoint,
         {
-          from: getRequiredEnv("CALLPRO_SENDER"),
+          from: senderNumber,
           to: formattedPhone,
           text: `Таны баталгаажуулах код: ${code}`,
         },
