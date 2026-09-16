@@ -57,16 +57,12 @@ export class AuthRegistrationService {
     }
 
     return prisma.$transaction(async (transaction) => {
-      const existingUser = await transaction.user.findFirst({
-        where: {
-          OR: [
-            { phoneNumber },
-            ...(pending.sapId ? [{ sapId: pending.sapId }] : []),
-          ],
-        },
+      const existingUser = await transaction.user.findUnique({
+        where: { phoneNumber },
+        select: { id: true },
       });
       if (existingUser)
-        throw new AppError(400, "Энэ хэрэглэгч аль хэдийн бүртгэгдсэн байна.");
+        throw new AppError(400, "Та аль хэдийн бүртгэл үүсгэсэн байна.");
       const user = await transaction.user.create({
         data: {
           sapId: pending.sapId,
@@ -128,14 +124,26 @@ export class AuthRegistrationService {
         [],
         "PHONE_NOT_WHITELISTED",
       );
-    const existingUser = await prisma.user.findFirst({
-      where: { OR: [{ phoneNumber }, ...(sapId ? [{ sapId }] : [])] },
+    const existingUser = await prisma.user.findUnique({
+      where: { phoneNumber },
+      select: { id: true },
     });
     if (existingUser)
+      throw new AppError(400, "Та аль хэдийн бүртгэл үүсгэсэн байна.");
+
+    const existingSapId = sapId
+      ? await prisma.user.findUnique({
+          where: { sapId },
+          select: { id: true },
+        })
+      : null;
+    if (existingSapId) {
       throw new AppError(
         400,
-        "Энэ утасны дугаар эсвэл SAP ID-тай хэрэглэгч бүртгэгдсэн байна.",
+        "Энэ SAP ID-тай хэрэглэгч аль хэдийн бүртгэгдсэн байна.",
       );
+    }
+
     return whitelistEntry;
   }
 }

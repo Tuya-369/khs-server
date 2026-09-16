@@ -74,7 +74,6 @@ model User {
   passwordHash         String
   role                 Role            @default(EMPLOYEE)
   isActive             Boolean         @default(true)
-  isWhitelisted        Boolean         @default(false)
   createdAt            DateTime        @default(now())
   updatedAt            DateTime        @updatedAt
   vehicles             Vehicle[]
