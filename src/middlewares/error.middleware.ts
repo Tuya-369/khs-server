@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import multer from "multer";
+import { Prisma } from "@prisma/client";
 import { AppError } from "../errors/app-error";
 import { logger } from "../utils/logger";
 
@@ -25,6 +26,23 @@ export const errorMiddleware = (
       success: false,
       code: "FILE_UPLOAD_ERROR",
       message: "Файл оруулах үед алдаа гарлаа.",
+      errors: [],
+    });
+  }
+
+  if (
+    err instanceof Prisma.PrismaClientKnownRequestError &&
+    err.code === "P2002"
+  ) {
+    const fields = Array.isArray(err.meta?.target) ? err.meta.target : [];
+    const isPhoneNumber = fields.includes("phoneNumber");
+
+    return res.status(400).json({
+      success: false,
+      code: isPhoneNumber ? "PHONE_ALREADY_REGISTERED" : "DUPLICATE_VALUE",
+      message: isPhoneNumber
+        ? "Таны утасны дугаар серверт бүртгэлтэй байна."
+        : "Энэ өгөгдөл аль хэдийн бүртгэлтэй байна.",
       errors: [],
     });
   }
