@@ -1,0 +1,1 @@
+ALTER TYPE "ProjectName" RENAME VALUE 'Төсөл' TO 'PROJECT';

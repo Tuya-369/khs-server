@@ -2,11 +2,9 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
-
 generator client {
   provider = "prisma-client-js"
 }
-
 enum Role {
   ADMIN
   ADMIN_PANEL
@@ -15,14 +13,13 @@ enum Role {
   EMPLOYEE
   HR
 }
-
 enum RequestStatus {
   PENDING
   SEARCHING
+  ORDERED
   NOT_FOUND
   COMPLETED
 }
-
 enum OrderStatus {
   NEW
   PENDING
@@ -32,28 +29,24 @@ enum OrderStatus {
   CONFIRMED
   REJECTED
 }
-
 enum ProjectName {
   UG               @map("UG")
   UB               @map("UB")
   BAYAJUULAH       @map("Баяжуулах")
-  PROJECT          @map("Төсөл")
+  PROJECT
   OPERATION        @map("operation")
   CONTRACTION      @map("contraction")
 }
-
 enum OtpPurpose {
   REGISTRATION
   PASSWORD_RESET
   LOGIN
 }
-
 enum FeedbackStatus {
   PENDING
   RESOLVED
   SUSPENDED
 }
-
 enum FeedbackCategory {
   WORKPLACE
   OPERATIONS
@@ -61,7 +54,6 @@ enum FeedbackCategory {
   COMPENSATION
   OTHER
 }
-
 model User {
   id                   String          @id @default(uuid())
   sapId                String?         @unique
@@ -87,7 +79,6 @@ model User {
   notifications        Notification[]
   feedbacks            Feedback[]
 }
-
 model RefreshToken {
   id        String   @id @default(uuid())
   token     String   @unique
@@ -96,7 +87,6 @@ model RefreshToken {
   expiresAt DateTime
   createdAt DateTime @default(now())
 }
-
 model Vehicle {
   id               String          @id @default(uuid())
   name             String
@@ -108,7 +98,6 @@ model Vehicle {
   parts            Part[]
   requests         RepairRequest[]
 }
-
 model Part {
   id           String          @id @default(uuid())
   name         String
@@ -120,7 +109,6 @@ model Part {
   requests     RepairRequest[]
   requestParts RequestPart[]
 }
-
 model RepairRequest {
   id            String         @id @default(uuid())
   driverId      String

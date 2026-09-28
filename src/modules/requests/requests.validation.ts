@@ -55,7 +55,7 @@ export const createRequestSchema = z.object({
 export const getAllRequestsSchema = z.object({
   query: z.object({
     status: z
-      .enum(["PENDING", "SEARCHING", "NOT_FOUND", "COMPLETED"])
+      .enum(["PENDING", "SEARCHING", "ORDERED", "NOT_FOUND", "COMPLETED"])
       .optional(),
     isReadByAdmin: z.enum(["true", "false"]).optional(),
     page: z.coerce.number().int().min(1).optional(),
@@ -66,7 +66,13 @@ export const getAllRequestsSchema = z.object({
 export const updateRequestStatusSchema = z.object({
   ...uuidParam.shape,
   body: z.object({
-    status: z.enum(["PENDING", "SEARCHING", "NOT_FOUND", "COMPLETED"]),
+    status: z.enum([
+      "PENDING",
+      "SEARCHING",
+      "ORDERED",
+      "NOT_FOUND",
+      "COMPLETED",
+    ]),
   }),
 });
 
