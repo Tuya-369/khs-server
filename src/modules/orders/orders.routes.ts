@@ -16,7 +16,14 @@ const service = new OrdersService();
 router.post(
   "/",
   authenticate,
-  authorize("EMPLOYEE", "DRIVER", "ADMIN", "TOKEN_MANAGER", "ADMIN_PANEL"),
+  authorize(
+    "EMPLOYEE",
+    "DRIVER",
+    "ADMIN",
+    "TOKEN_MANAGER",
+    "ADMIN_PANEL",
+    "HR",
+  ),
   validate(createOrderSchema),
   async (req, res, next) => {
     try {
@@ -33,7 +40,14 @@ router.post(
 router.get(
   "/my",
   authenticate,
-  authorize("EMPLOYEE", "DRIVER", "ADMIN", "TOKEN_MANAGER", "ADMIN_PANEL"),
+  authorize(
+    "EMPLOYEE",
+    "DRIVER",
+    "ADMIN",
+    "TOKEN_MANAGER",
+    "ADMIN_PANEL",
+    "HR",
+  ),
   async (req, res, next) => {
     try {
       res.json({
