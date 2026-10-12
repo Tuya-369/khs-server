@@ -25,6 +25,11 @@ const profileImageUploadOptions = {
   resource_type: "image",
 } as const;
 
+const merchPartnerLogoUploadOptions = {
+  folder: "khs/merch-partner-logos",
+  resource_type: "image",
+} as const;
+
 type CloudinaryUploadedAsset = {
   secure_url: string;
   public_id: string;
@@ -122,6 +127,21 @@ export const uploadProfileImageToCloudinary = async (
   const uploaded = await uploadBufferToCloudinary(
     file,
     profileImageUploadOptions,
+  );
+  if (!uploaded) return null;
+
+  return {
+    secureUrl: uploaded.secure_url,
+    publicId: uploaded.public_id,
+  };
+};
+
+export const uploadMerchPartnerLogoToCloudinary = async (
+  file: Express.Multer.File,
+): Promise<{ secureUrl: string; publicId: string } | null> => {
+  const uploaded = await uploadBufferToCloudinary(
+    file,
+    merchPartnerLogoUploadOptions,
   );
   if (!uploaded) return null;
 

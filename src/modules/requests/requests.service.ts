@@ -1,6 +1,7 @@
 import { AppError } from "../../errors/app-error";
 import type { Prisma, RequestStatus } from "@prisma/client";
 import { prisma } from "../../utils/prisma";
+import { NotificationsService } from "../notifications/notifications.service";
 
 type CreateRequestData = {
   vehicleId: string;
@@ -24,6 +25,8 @@ const requestDetailsInclude = {
 } satisfies Prisma.RepairRequestInclude;
 
 export class RequestsService {
+  private readonly notifications = new NotificationsService();
+
   async getDriverFormOptions() {
     const [vehicles, globalParts] = await Promise.all([
       prisma.vehicle.findMany({
@@ -90,7 +93,7 @@ export class RequestsService {
       },
     });
 
-    return prisma.repairRequest.create({
+    const request = await prisma.repairRequest.create({
       data: {
         driverId,
         vehicleId: data.vehicleId,
@@ -105,6 +108,13 @@ export class RequestsService {
       },
       include: { requestParts: { include: { part: true } }, images: true },
     });
+    await this.notifications.notifyRoles(["ADMIN", "ADMIN_PANEL"], {
+      title: "Шинэ сэлбэгийн захиалга",
+      message: "Шинэ сэлбэгийн захиалга ирлээ.",
+      type: "REPAIR_REQUEST",
+      href: "/admin-dashboard",
+    });
+    return request;
   }
 
   async getMyRequests(driverId: string) {
@@ -173,11 +183,19 @@ export class RequestsService {
       );
     }
 
-    return prisma.repairRequest.update({
+    const updatedRequest = await prisma.repairRequest.update({
       where: { id },
       data: { status },
       include: requestDetailsInclude,
     });
+    await this.notifications.create({
+      userId: updatedRequest.driverId,
+      title: "Сэлбэгийн захиалгын төлөв шинэчлэгдлээ",
+      message: `Таны сэлбэгийн захиалгын төлөв ${status} боллоо.`,
+      type: "REPAIR_REQUEST",
+      href: "/profile?tab=dashboard",
+    });
+    return updatedRequest;
   }
 
   async claim(id: string, adminId: string) {

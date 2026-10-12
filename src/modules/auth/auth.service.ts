@@ -111,6 +111,7 @@ export class AuthService {
       otpToken: this.jwt.issueOtpToken(user.id, phoneNumber),
       maskedPhone: maskPhone(phoneNumber),
       expiresIn: this.otpExpiresInMs / 1000,
+      user: { id: user.id, role: user.role },
       ...(otpResult.debugCode ? { debugCode: otpResult.debugCode } : {}),
     };
   }

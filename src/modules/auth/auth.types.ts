@@ -48,6 +48,10 @@ export type LoginChallengeResult = {
   maskedPhone: string;
   expiresIn: number;
   debugCode?: string;
+  user: {
+    id: string;
+    role: Role;
+  };
 };
 
 export type UpdateMePayload = {

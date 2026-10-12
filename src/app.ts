@@ -7,10 +7,14 @@ import rateLimit from "express-rate-limit";
 import authRoutes from "./modules/auth/auth.routes";
 import requestRoutes from "./modules/requests/requests.routes";
 import merchRoutes from "./modules/merch/merch.routes";
+import merchPartnerRoutes, {
+  adminMerchPartnerRoutes,
+} from "./modules/merch/merch-partner.routes";
 import orderRoutes from "./modules/orders/orders.routes";
 import dashboardRoutes from "./modules/dashboard/dashboard.routes";
 import calendarRoutes from "./modules/calendar/calendar.routes";
 import feedbackRoutes from "./modules/feedback/feedback.routes";
+import notificationRoutes from "./modules/notifications/notifications.routes";
 import { errorMiddleware } from "./middlewares/error.middleware";
 
 const app = express();
@@ -86,10 +90,13 @@ app.get("/healthz", (_req, res) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/requests", requestRoutes);
 app.use("/api/merch", merchRoutes);
+app.use("/api/merch-partners", merchPartnerRoutes);
+app.use("/api/admin/merch-partners", adminMerchPartnerRoutes);
 app.use("/api/merch-orders", orderRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/calendar", calendarRoutes);
 app.use("/api/feedback", feedbackRoutes);
+app.use("/api/notifications", notificationRoutes);
 
 app.use(errorMiddleware);
 

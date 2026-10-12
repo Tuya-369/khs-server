@@ -115,6 +115,7 @@ export const createUserByAdminSchema = z.object({
     phoneNumber: phoneNumberSchema,
     password: z.string().min(6, "Нууц үг хамгийн багадаа 6 тэмдэгт байна."),
     role: z.enum([
+      "SUPERADMIN",
       "ADMIN",
       "ADMIN_PANEL",
       "DRIVER",

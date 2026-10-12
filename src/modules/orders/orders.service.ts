@@ -1,6 +1,7 @@
 import type { OrderStatus, Prisma } from "@prisma/client";
 import { AppError } from "../../errors/app-error";
 import { prisma } from "../../utils/prisma";
+import { NotificationsService } from "../notifications/notifications.service";
 
 type CreateOrderData = {
   merchItemId: string;
@@ -10,39 +11,52 @@ type CreateOrderData = {
 };
 
 export class OrdersService {
+  private readonly notifications = new NotificationsService();
+
   async createOrder(userId: string, data: CreateOrderData) {
-    return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      const item = await tx.merchItem.findUnique({
-        where: { id: data.merchItemId },
-        select: { colors: true },
-      });
+    const order = await prisma.$transaction(
+      async (tx: Prisma.TransactionClient) => {
+        const item = await tx.merchItem.findUnique({
+          where: { id: data.merchItemId },
+          select: { colors: true },
+        });
 
-      const stockUpdate = await tx.merchItem.updateMany({
-        where: {
-          id: data.merchItemId,
-          isActive: true,
-          stock: { gte: data.qty },
-        },
-        data: { stock: { decrement: data.qty } },
-      });
+        const stockUpdate = await tx.merchItem.updateMany({
+          where: {
+            id: data.merchItemId,
+            isActive: true,
+            stock: { gte: data.qty },
+          },
+          data: { stock: { decrement: data.qty } },
+        });
 
-      if (!item || stockUpdate.count === 0) {
-        throw new AppError(
-          400,
-          "Бараа олдсонгүй эсвэл үлдэгдэл хүрэлцэхгүй байна.",
-        );
-      }
+        if (!item || stockUpdate.count === 0) {
+          throw new AppError(
+            400,
+            "Бараа олдсонгүй эсвэл үлдэгдэл хүрэлцэхгүй байна.",
+          );
+        }
 
-      return tx.merchOrder.create({
-        data: {
-          userId,
-          merchItemId: data.merchItemId,
-          size: data.size,
-          color: item.colors.length > 0 ? (data.color ?? "") : "",
-          qty: data.qty,
-        },
-      });
+        return tx.merchOrder.create({
+          data: {
+            userId,
+            merchItemId: data.merchItemId,
+            size: data.size,
+            color: item.colors.length > 0 ? (data.color ?? "") : "",
+            qty: data.qty,
+          },
+        });
+      },
+    );
+
+    await this.notifications.notifyRoles(["TOKEN_MANAGER", "ADMIN_PANEL"], {
+      title: "Шинэ merch захиалга",
+      message: "Шинэ барааны захиалга шалгахыг хүлээж байна.",
+      type: "MERCH_ORDER",
+      href: "/profile?tab=dashboard",
     });
+
+    return order;
   }
 
   async getMyOrders(userId: string) {
@@ -108,7 +122,7 @@ export class OrdersService {
       );
     }
 
-    return prisma.merchOrder.update({
+    const confirmedOrder = await prisma.merchOrder.update({
       where: { id },
       data: {
         status: "CONFIRMED",
@@ -129,6 +143,14 @@ export class OrdersService {
         merchItem: true,
       },
     });
+    await this.notifications.create({
+      userId: confirmedOrder.userId,
+      title: "Барааны захиалга батлагдлаа",
+      message: "Таны барааны захиалга батлагдлаа.",
+      type: "MERCH_ORDER",
+      href: "/profile",
+    });
+    return confirmedOrder;
   }
 
   async rejectOrder(id: string, managerId: string) {
@@ -143,39 +165,41 @@ export class OrdersService {
       );
     }
 
-    return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      const rejectedOrder = await tx.merchOrder.update({
-        where: { id },
-        data: {
-          status: "REJECTED",
-          rejectedAt: new Date(),
-          rejectedById: managerId,
-        },
-        include: {
-          user: {
-            select: {
-              id: true,
-              sapId: true,
-              firstName: true,
-              lastName: true,
-              phoneNumber: true,
-              role: true,
-            },
+    const rejectedOrder = await prisma.$transaction(
+      async (tx: Prisma.TransactionClient) => {
+        const rejectedOrder = await tx.merchOrder.update({
+          where: { id },
+          data: {
+            status: "REJECTED",
+            rejectedAt: new Date(),
+            rejectedById: managerId,
           },
-          merchItem: true,
-        },
-      });
+          include: {
+            user: {
+              select: {
+                id: true,
+                sapId: true,
+                firstName: true,
+                lastName: true,
+                phoneNumber: true,
+                role: true,
+              },
+            },
+            merchItem: true,
+          },
+        });
 
-      await tx.notification.create({
-        data: {
-          userId: rejectedOrder.userId,
-          title: "Барааны захиалга батлагдаагүй",
-          message: "Таны барааны захиалга батлагдаагүй.",
-        },
-      });
-
-      return rejectedOrder;
+        return rejectedOrder;
+      },
+    );
+    await this.notifications.create({
+      userId: rejectedOrder.userId,
+      title: "Барааны захиалга батлагдаагүй",
+      message: "Таны барааны захиалга батлагдаагүй.",
+      type: "MERCH_ORDER",
+      href: "/profile",
     });
+    return rejectedOrder;
   }
 
   async updateStatus(id: string, status: OrderStatus) {
@@ -184,7 +208,7 @@ export class OrdersService {
       throw new AppError(404, "Захиалга олдсонгүй.", [], "ORDER_NOT_FOUND");
     }
 
-    return prisma.merchOrder.update({
+    const updatedOrder = await prisma.merchOrder.update({
       where: { id },
       data: { status },
       include: {
@@ -201,6 +225,14 @@ export class OrdersService {
         merchItem: true,
       },
     });
+    await this.notifications.create({
+      userId: updatedOrder.userId,
+      title: "Барааны захиалгын төлөв шинэчлэгдлээ",
+      message: `Таны захиалгын төлөв ${status} болж өөрчлөгдлөө.`,
+      type: "MERCH_ORDER",
+      href: "/profile",
+    });
+    return updatedOrder;
   }
 
   async markRead(id: string) {
