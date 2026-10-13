@@ -2,6 +2,8 @@ import jwt from "jsonwebtoken";
 import { OtpTokenPayload, ResetTokenPayload } from "./auth.types";
 import { getRequiredEnv } from "./auth.utils";
 
+export const REFRESH_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
 export class AuthJwt {
   constructor(private readonly otpExpiresInSeconds: number) {}
 
@@ -12,7 +14,17 @@ export class AuthJwt {
   }
 
   issueRefreshToken(userId: string): string {
-    return jwt.sign({ userId }, getRequiredEnv("JWT_REFRESH_SECRET"));
+    return jwt.sign({ userId }, getRequiredEnv("JWT_REFRESH_SECRET"), {
+      expiresIn: REFRESH_TOKEN_TTL_MS / 1000,
+    });
+  }
+
+  verifyRefreshToken(token: string): { userId: string } {
+    const payload = jwt.verify(token, getRequiredEnv("JWT_REFRESH_SECRET"));
+    if (typeof payload === "string" || typeof payload.userId !== "string") {
+      throw new Error("Invalid refresh token payload");
+    }
+    return { userId: payload.userId };
   }
 
   issueOtpToken(userId: string, phoneNumber: string): string {

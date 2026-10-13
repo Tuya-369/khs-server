@@ -1,7 +1,7 @@
 import bcrypt from "bcrypt";
 import { AppError } from "../../errors/app-error";
 import { prisma } from "../../utils/prisma";
-import { AuthJwt } from "./auth.jwt";
+import { AuthJwt, REFRESH_TOKEN_TTL_MS } from "./auth.jwt";
 import { AuthOtpService } from "./auth.otp.service";
 import { AuthProfileService } from "./auth.profile.service";
 import { AuthRegistrationService } from "./auth.registration.service";
@@ -22,9 +22,6 @@ import {
 
 export class AuthService {
   private readonly otpExpiresInMs = 60 * 1000;
-  private readonly nonExpiringSessionDate = new Date(
-    "2099-12-31T23:59:59.999Z",
-  );
   private readonly jwt = new AuthJwt(this.otpExpiresInMs / 1000);
   private readonly otpService = new AuthOtpService(this.otpExpiresInMs);
   private readonly registrationService = new AuthRegistrationService(
@@ -190,11 +187,29 @@ export class AuthService {
   }
 
   async refresh(token: string) {
+    let tokenPayload: { userId: string };
+    try {
+      tokenPayload = this.jwt.verifyRefreshToken(token);
+    } catch {
+      throw new AppError(401, "Хүчингүй refresh токен эсвэл хугацаа дууссан.");
+    }
+
     const dbToken = await prisma.refreshToken.findUnique({
       where: { token },
       include: { user: true },
     });
     if (!dbToken) throw new AppError(401, "Хүчингүй refresh токен.");
+    if (
+      dbToken.expiresAt <= new Date() ||
+      dbToken.userId !== tokenPayload.userId
+    ) {
+      await prisma.refreshToken.delete({ where: { id: dbToken.id } });
+      throw new AppError(401, "Refresh токены хугацаа дууссан.");
+    }
+    if (!dbToken.user.isActive) {
+      await prisma.refreshToken.delete({ where: { id: dbToken.id } });
+      throw new AppError(403, "Таны бүртгэл идэвхгүй байна.");
+    }
 
     return {
       accessToken: this.jwt.issueAccessToken(
@@ -227,7 +242,7 @@ export class AuthService {
       data: {
         token: refreshToken,
         userId: user.id,
-        expiresAt: this.nonExpiringSessionDate,
+        expiresAt: new Date(Date.now() + REFRESH_TOKEN_TTL_MS),
       },
     });
 

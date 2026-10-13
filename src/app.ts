@@ -14,6 +14,7 @@ import orderRoutes from "./modules/orders/orders.routes";
 import dashboardRoutes from "./modules/dashboard/dashboard.routes";
 import calendarRoutes from "./modules/calendar/calendar.routes";
 import feedbackRoutes from "./modules/feedback/feedback.routes";
+import leaveRequestRoutes from "./modules/leave-requests/leave-requests.routes";
 import notificationRoutes from "./modules/notifications/notifications.routes";
 import { errorMiddleware } from "./middlewares/error.middleware";
 
@@ -34,7 +35,7 @@ const corsWhitelistSet = new Set(
     .filter(Boolean),
 );
 
-app.set("trust proxy", true);
+app.set("trust proxy", 1);
 
 app.use(helmet());
 app.use(
@@ -96,6 +97,7 @@ app.use("/api/merch-orders", orderRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/calendar", calendarRoutes);
 app.use("/api/feedback", feedbackRoutes);
+app.use("/api/leave-requests", leaveRequestRoutes);
 app.use("/api/notifications", notificationRoutes);
 
 app.use(errorMiddleware);

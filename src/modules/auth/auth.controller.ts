@@ -1,9 +1,9 @@
 import { Request, Response, NextFunction } from "express";
 import { AuthService } from "./auth.service";
+import { REFRESH_TOKEN_TTL_MS } from "./auth.jwt";
 import { AppError } from "../../errors/app-error";
 
 const authService = new AuthService();
-const persistentSessionExpiresAt = new Date("2099-12-31T23:59:59.999Z");
 const otpCookieMaxAgeMs = 60 * 1000;
 
 const getCookieOptions = (maxAge?: number) => ({
@@ -91,11 +91,11 @@ export class AuthController {
           code: req.body.code,
         });
 
-      res.clearCookie("otpToken", getCookieOptions(otpCookieMaxAgeMs));
+      res.clearCookie("otpToken", getCookieOptions());
 
       res.cookie("refreshToken", refreshToken, {
-        ...getCookieOptions(),
-        expires: persistentSessionExpiresAt,
+        ...getCookieOptions(REFRESH_TOKEN_TTL_MS),
+        expires: new Date(Date.now() + REFRESH_TOKEN_TTL_MS),
       });
 
       res.status(200).json({ success: true, data: { user, accessToken } });
@@ -136,6 +136,9 @@ export class AuthController {
   async refresh(req: Request, res: Response, next: NextFunction) {
     try {
       const token = req.cookies.refreshToken;
+      if (!token) {
+        throw new AppError(401, "Refresh токен олдсонгүй.");
+      }
       const { accessToken } = await authService.refresh(token);
       res.status(200).json({ success: true, data: { accessToken } });
     } catch (error) {

@@ -55,6 +55,16 @@ enum FeedbackCategory {
   COMPENSATION
   OTHER
 }
+enum LeaveType {
+  SICK
+  PERSONAL
+  OTHER
+}
+enum LeaveRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
 model User {
   id                   String          @id @default(uuid())
   sapId                String?         @unique
@@ -79,6 +89,8 @@ model User {
   refreshTokens        RefreshToken[]
   notifications        Notification[]
   feedbacks            Feedback[]
+  leaveRequests        LeaveRequest[]  @relation("LeaveRequests")
+  reviewedLeaveRequests LeaveRequest[] @relation("ReviewedLeaveRequests")
 }
 model RefreshToken {
   id        String   @id @default(uuid())
@@ -226,6 +238,26 @@ model Feedback {
 
   @@index([status, createdAt])
   @@index([category, createdAt])
+  @@index([userId])
+}
+
+model LeaveRequest {
+  id           String             @id @default(uuid())
+  userId       String
+  user         User               @relation("LeaveRequests", fields: [userId], references: [id], onDelete: Cascade)
+  type         LeaveType          @default(OTHER)
+  startDate    DateTime
+  endDate      DateTime
+  reason       String
+  proofImageUrl String
+  status       LeaveRequestStatus @default(PENDING)
+  reviewedById String?
+  reviewedBy   User?              @relation("ReviewedLeaveRequests", fields: [reviewedById], references: [id], onDelete: SetNull)
+  reviewedAt   DateTime?
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  @@index([status, createdAt])
   @@index([userId])
 }
 

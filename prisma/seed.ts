@@ -504,12 +504,12 @@ async function main() {
       category: "merch",
       description: "Компанийн логотой цүнх",
       longDescription: "Том оврын компанийн логотой цүнх.",
-      price: 190000,
+      price: 130000,
       stock: 100,
       sizes: ["One Size"],
       colors: ["Хар"],
       imageUrl:
-        "https://res.cloudinary.com/hfroefns/image/upload/v1785743470/bag_gfrdoa.png",
+        "https://res.cloudinary.com/hfroefns/image/upload/v1791770682/Screenshot_2026-10-12_100049_hwfoqr.png",
     },
     {
       title: "Халуун хүйтэнээ хадгалдаг сав",
@@ -578,27 +578,39 @@ async function main() {
     {
       title: "Чихэвч",
       category: "merch",
-      description: "Sony-ийн чихэвч",
-      longDescription: "Sony-ийн чихэвч загвар, өндөр чанартай дуугаралттай.",
-      price: 90000,
+      description: "JBL-ийн чихэвч",
+      longDescription: "JBL-ийн чихэвч загвар, өндөр чанартай дуугаралттай.",
+      price: 130000,
       stock: 100,
       sizes: ["One Size"],
-      colors: ["Хар"],
+      colors: ["Хар", "Цагаан"],
       imageUrl:
-        "https://res.cloudinary.com/hfroefns/image/upload/v1785743471/sony_bprtpg.png",
+        "https://res.cloudinary.com/hfroefns/image/upload/v1791770826/Screenshot_2026-10-12_100655_ajqhzx.png",
     },
+
     {
       title: "Утасгүй спикер",
       category: "merch",
-      description: "Утасгүй чанга яригч",
-      longDescription:
-        "Утасгүй чанга яригч загвар, өндөр чанартай дуугаралттай.",
+      description: "Утасгүй спикер",
+      longDescription: "Чанартай дуугаралттай.",
       price: 160000,
       stock: 100,
       sizes: ["One Size"],
       colors: ["Хар", "Цагаан"],
       imageUrl:
         "https://res.cloudinary.com/hfroefns/image/upload/v1785743471/speacker_mtvwj1.png",
+    },
+    {
+      title: "Утасгүй спикер",
+      category: "merch",
+      description: "Утасгүй спикер ",
+      longDescription: "Утасгүй спикер, өндөр чанартай дуугаралттай.",
+      price: 230000,
+      stock: 100,
+      sizes: ["One Size"],
+      colors: ["Хар"],
+      imageUrl:
+        "https://res.cloudinary.com/hfroefns/image/upload/v1791770826/Screenshot_2026-10-12_100643_wzab11.png",
     },
     {
       title: "Таблет",
@@ -1514,10 +1526,30 @@ async function main() {
     }),
   );
 
-  await prisma.merchItem.deleteMany();
-  await prisma.merchItem.createMany({
-    data: merchSeedData,
+  // Захиалгууд cascade-аар устахаас сэргийлж item-үүдийг устгахгүй, шинэчилнэ/нэмнэ.
+  const existingItems = await prisma.merchItem.findMany({
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
   });
+  const usedIds = new Set<string>();
+
+  for (const item of merchSeedData) {
+    const match =
+      existingItems.find(
+        (e) =>
+          !usedIds.has(e.id) &&
+          e.title === item.title &&
+          e.imageUrl === item.imageUrl,
+      ) ??
+      existingItems.find((e) => !usedIds.has(e.id) && e.title === item.title);
+
+    if (match) {
+      usedIds.add(match.id);
+      const { stock: _stock, isActive: _isActive, ...data } = item;
+      await prisma.merchItem.update({ where: { id: match.id }, data });
+    } else {
+      await prisma.merchItem.create({ data: item });
+    }
+  }
 
   console.log(
     `Демо өгөгдөл амжилттай орлоо. (${merchSeedData.length} merch item, ${whitelist.length} whitelist entry)`,

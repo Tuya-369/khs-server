@@ -59,6 +59,7 @@ router.post(
   validate(resetPasswordSchema),
   controller.resetPassword,
 );
+router.post("/refresh-token", controller.refresh);
 router.post("/refresh", controller.refresh);
 router.post("/logout", controller.logout);
 router.get("/me", authenticate, controller.me);
