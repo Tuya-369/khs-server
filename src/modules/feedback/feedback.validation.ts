@@ -23,5 +23,6 @@ export const updateFeedbackStatusSchema = z.object({
   ...feedbackIdSchema.shape,
   body: z.object({
     status: z.enum(["PENDING", "RESOLVED", "SUSPENDED"]),
+    response: z.string().trim().max(1000).optional(),
   }),
 });

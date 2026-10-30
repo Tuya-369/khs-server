@@ -1,6 +1,5 @@
 import { Router } from "express";
 import { authenticate } from "../../middlewares/auth.middleware";
-import { authorize } from "../../middlewares/role.middleware";
 import { upload } from "../../middlewares/upload.middleware";
 import { validate } from "../../middlewares/validate.middleware";
 import { AppError } from "../../errors/app-error";
@@ -25,6 +24,16 @@ router.post(
         throw new AppError(400, "Баталгаажуулах зураг оруулна уу.");
       }
 
+      await service.validateApproverForRequest(
+        req.user!.userId,
+        {
+          durationType: req.body.durationType,
+          startDate: req.body.startDate,
+          endDate: req.body.endDate,
+          selectedApproverPhoneNumber:
+            req.body.selectedApproverPhoneNumber,
+        },
+      );
       const proofImageUrl = await uploadToCloudinary(req.file);
       if (!proofImageUrl) {
         throw new AppError(
@@ -33,10 +42,10 @@ router.post(
         );
       }
 
-      const leaveRequest = await service.createLeaveRequest(
-        req.user!.userId,
-        { ...req.body, proofImageUrl },
-      );
+      const leaveRequest = await service.createLeaveRequest(req.user!.userId, {
+        ...req.body,
+        proofImageUrl,
+      });
       res.status(201).json({ success: true, data: leaveRequest });
     } catch (error) {
       next(error);
@@ -55,26 +64,42 @@ router.get("/mine", authenticate, async (req, res, next) => {
   }
 });
 
-router.get(
-  "/",
-  authenticate,
-  authorize("SUPERADMIN", "ADMIN_PANEL", "HR"),
-  async (req, res, next) => {
-    try {
-      res.json({
-        success: true,
-        data: { items: await service.getLeaveRequests(req.user!.userId) },
-      });
-    } catch (error) {
-      next(error);
-    }
-  },
-);
+router.get("/approvers", authenticate, async (req, res, next) => {
+  try {
+    res.json({
+      success: true,
+      data: { items: await service.getApprovers(req.user!.userId) },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get("/review-access", authenticate, async (req, res, next) => {
+  try {
+    res.json({
+      success: true,
+      data: { canReview: await service.hasReviewAccess(req.user!.userId) },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get("/", authenticate, async (req, res, next) => {
+  try {
+    res.json({
+      success: true,
+      data: { items: await service.getLeaveRequests(req.user!.userId) },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
 
 router.patch(
   "/:id/status",
   authenticate,
-  authorize("SUPERADMIN", "ADMIN_PANEL", "HR"),
   validate(updateLeaveRequestStatusSchema),
   async (req, res, next) => {
     try {

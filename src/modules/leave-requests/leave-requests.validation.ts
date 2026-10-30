@@ -16,6 +16,10 @@ export const createLeaveRequestSchema = z.object({
   body: z
     .object({
       type: z.enum(["SICK", "PERSONAL", "OTHER"]),
+      durationType: z.enum(["DAILY", "HOURLY"]),
+      selectedApproverPhoneNumber: z
+        .string()
+        .regex(/^\d{8}$/, "Батлагчийн дугаар буруу байна."),
       startDate: dateString,
       endDate: dateString,
       reason: z
@@ -30,7 +34,26 @@ export const createLeaveRequestSchema = z.object({
         message: "Эхлэх огноо дуусах огнооноос хойш байж болохгүй.",
         path: ["endDate"],
       },
-    ),
+    )
+    .superRefine((data, context) => {
+      if (data.durationType !== "HOURLY") return;
+
+      if (data.startDate.slice(0, 10) !== data.endDate.slice(0, 10)) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Цагийн чөлөө нэг өдөрт багтах ёстой.",
+          path: ["endDate"],
+        });
+      }
+
+      if (new Date(data.startDate) >= new Date(data.endDate)) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Дуусах цаг эхлэх цагаас хойш байна.",
+          path: ["endDate"],
+        });
+      }
+    }),
 });
 
 export const updateLeaveRequestStatusSchema = z.object({

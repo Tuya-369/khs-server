@@ -55,13 +55,43 @@ export const sendSms = async (
     });
   } catch (error) {
     const response = axios.isAxiosError(error) ? error.response : undefined;
+    const errorBody =
+      typeof response?.data === "string"
+        ? response.data
+        : JSON.stringify(response?.data || {});
+
     logger.error("SMS provider error", {
       status: response?.status,
-      body:
-        typeof response?.data === "string"
-          ? response.data
-          : JSON.stringify(response?.data || {}),
+      body: errorBody,
     });
+
+    // If CallPro rejected due to unverified links, strip protocol or URL and retry once
+    if (errorBody.includes("unverified links")) {
+      const sanitizedText = text
+        .replace(/https?:\/\//gi, "")
+        .trim();
+
+      if (sanitizedText !== text) {
+        try {
+          const retryResponse = await axios.post(
+            endpoint,
+            { from: senderNumber, to: formattedPhone, text: sanitizedText },
+            {
+              headers: {
+                "Content-Type": "application/json",
+                Accept: "application/json",
+                "x-api-key": apiKey,
+              },
+            },
+          );
+          logger.info("SMS retry without protocol successful", {
+            status: retryResponse.status,
+          });
+        } catch (retryError) {
+          logger.error("SMS retry failed", { error: retryError });
+        }
+      }
+    }
   }
 };
 

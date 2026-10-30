@@ -17,6 +17,7 @@ router.post(
   "/",
   authenticate,
   authorize(
+    "SUPERADMIN",
     "EMPLOYEE",
     "DRIVER",
     "ADMIN",
@@ -41,6 +42,7 @@ router.get(
   "/my",
   authenticate,
   authorize(
+    "SUPERADMIN",
     "EMPLOYEE",
     "DRIVER",
     "ADMIN",

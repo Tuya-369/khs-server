@@ -37,6 +37,7 @@ enum ProjectName {
   PROJECT
   OPERATION        @map("operation")
   CONTRACTION      @map("contraction")
+  OTHER
 }
 enum OtpPurpose {
   REGISTRATION
@@ -64,6 +65,15 @@ enum LeaveRequestStatus {
   PENDING
   APPROVED
   REJECTED
+}
+enum LeaveDurationType {
+  DAILY
+  HOURLY
+}
+enum LeaveApprovalLevel {
+  SENIOR_SPECIALIST
+  UNIT_MANAGER
+  HR_DIRECTOR
 }
 model User {
   id                   String          @id @default(uuid())
@@ -227,14 +237,16 @@ model Notification {
 }
 
 model Feedback {
-  id        String         @id @default(uuid())
-  userId    String
-  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  category  FeedbackCategory @default(OTHER)
-  message   String
-  status    FeedbackStatus @default(PENDING)
-  createdAt DateTime       @default(now())
-  updatedAt DateTime       @updatedAt
+  id          String           @id @default(uuid())
+  userId      String
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category    FeedbackCategory @default(OTHER)
+  message     String
+  status      FeedbackStatus   @default(PENDING)
+  response    String?
+  respondedAt DateTime?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
 
   @@index([status, createdAt])
   @@index([category, createdAt])
@@ -246,10 +258,13 @@ model LeaveRequest {
   userId       String
   user         User               @relation("LeaveRequests", fields: [userId], references: [id], onDelete: Cascade)
   type         LeaveType          @default(OTHER)
+  durationType LeaveDurationType  @default(DAILY)
   startDate    DateTime
   endDate      DateTime
   reason       String
   proofImageUrl String
+  selectedApproverPhoneNumber String?
+  selectedApproverName String?
   status       LeaveRequestStatus @default(PENDING)
   reviewedById String?
   reviewedBy   User?              @relation("ReviewedLeaveRequests", fields: [reviewedById], references: [id], onDelete: SetNull)
@@ -259,6 +274,7 @@ model LeaveRequest {
 
   @@index([status, createdAt])
   @@index([userId])
+  @@index([selectedApproverPhoneNumber, createdAt])
 }
 
 model OtpVerification {
@@ -289,8 +305,26 @@ model Whitelist {
   id          String      @id @default(uuid())
   phoneNumber String      @unique
   projectName ProjectName
+  leaveRequestAccess LeaveRequestAccess[]
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
+}
+
+model LeaveRequestAccess {
+  phoneNumber     String
+  whitelist       Whitelist            @relation(fields: [phoneNumber], references: [phoneNumber], onDelete: Cascade)
+  displayName     String               @default("")
+  projectName     ProjectName
+  canView         Boolean              @default(false)
+  canApprove      Boolean              @default(false)
+  approvalLevel   LeaveApprovalLevel?
+  isResponsibleHr Boolean              @default(false)
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  @@id([phoneNumber, projectName])
+  @@index([projectName, canView])
+  @@index([projectName, canApprove])
 }
 
 model CalendarNote {

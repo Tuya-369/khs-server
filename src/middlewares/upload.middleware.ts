@@ -1,12 +1,10 @@
 import multer from "multer";
 import { AppError } from "../errors/app-error";
-
 const hardMaxFileSizeMb = Number(process.env.IMAGE_HARD_MAX_SIZE_MB || "20");
 const maxFileSizeBytes =
   Number.isFinite(hardMaxFileSizeMb) && hardMaxFileSizeMb > 0
     ? hardMaxFileSizeMb * 1024 * 1024
     : 20 * 1024 * 1024;
-
 const allowedMimeTypes = new Set([
   "image/jpeg",
   "image/jpg",
@@ -15,7 +13,6 @@ const allowedMimeTypes = new Set([
   "image/heic",
   "image/heif",
 ]);
-
 export const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: maxFileSizeBytes },
