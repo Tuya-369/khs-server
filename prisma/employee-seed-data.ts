@@ -315,6 +315,8 @@ export const employeeProjectAssignments = [
   { phoneNumber: "99906389", projectName: ProjectName.PROJECT },
   { phoneNumber: "99939871", projectName: ProjectName.PROJECT },
   { phoneNumber: "80000644", projectName: ProjectName.UB },
+  { phoneNumber: "99080190", projectName: ProjectName.UB },
+  { phoneNumber: "99036907", projectName: ProjectName.UB },
   { phoneNumber: "80256979", projectName: ProjectName.UB },
   { phoneNumber: "80971057", projectName: ProjectName.UB },
   { phoneNumber: "85121254", projectName: ProjectName.UB },
@@ -776,10 +778,29 @@ export const employeeProjectAssignments = [
   { phoneNumber: "99982573", projectName: ProjectName.UG },
   { phoneNumber: "99989138", projectName: ProjectName.UG },
   { phoneNumber: "99999112", projectName: ProjectName.UG },
+  { phoneNumber: "99099511", projectName: ProjectName.OTHER },
+  { phoneNumber: "88116975", projectName: ProjectName.OTHER },
 ] as const satisfies ReadonlyArray<{
   phoneNumber: string;
   projectName: ProjectName;
 }>;
+
+export const constructionDepartmentPhoneNumbers = [
+  "80000644",
+  "89190201",
+  "88747733",
+  "99968141",
+  "86660945",
+  "80256979",
+  "89015168",
+  "89403038",
+  "89402309",
+  "94055055",
+] as const;
+
+export const leaveRequestConstructionApproverAssignments = [
+  [ProjectName.UB, "88116975"],
+] as const;
 
 export const leaveRequestAccessAssignments = [
   {
@@ -965,6 +986,13 @@ export const leaveRequestAccessAssignments = [
     canApprove: true,
   },
   {
+    phoneNumber: "99393999",
+    displayName: "Ainur Asylbyek",
+    projectName: ProjectName.OTHER,
+    canView: true,
+    canApprove: false,
+  },
+  {
     phoneNumber: "99997802",
     displayName: "Tsend-Ayush Nanzaddorj",
     projectName: ProjectName.OTHER,
@@ -1035,11 +1063,81 @@ export const leaveRequestAccessAssignments = [
     canApprove: true,
   },
   {
+    phoneNumber: "99080190",
+    displayName: "Bilguun Ganbold",
+    projectName: ProjectName.UB,
+    canView: false,
+    canApprove: true,
+  },
+  {
+    phoneNumber: "88116975",
+    displayName: "Bayarmunkh Tsend-Ayush",
+    projectName: ProjectName.UB,
+    canView: false,
+    canApprove: true,
+  },
+  {
+    phoneNumber: "99036907",
+    displayName: "Anar-Erdene Purevjav",
+    projectName: ProjectName.UB,
+    canView: false,
+    canApprove: true,
+  },
+  {
     phoneNumber: "80688616",
     displayName: "Gantulga Gantuya",
     projectName: ProjectName.UB,
     canView: false,
     canApprove: false,
+  },
+  {
+    phoneNumber: "99099511",
+    displayName: "Gantulga Enkhbold",
+    projectName: ProjectName.UB,
+    canView: false,
+    canApprove: true,
+  },
+  {
+    phoneNumber: "99099511",
+    displayName: "Gantulga Enkhbold",
+    projectName: ProjectName.UG,
+    canView: false,
+    canApprove: true,
+  },
+  {
+    phoneNumber: "99099511",
+    displayName: "Gantulga Enkhbold",
+    projectName: ProjectName.BAYAJUULAH,
+    canView: false,
+    canApprove: true,
+  },
+  {
+    phoneNumber: "99099511",
+    displayName: "Gantulga Enkhbold",
+    projectName: ProjectName.PROJECT,
+    canView: false,
+    canApprove: true,
+  },
+  {
+    phoneNumber: "99099511",
+    displayName: "Gantulga Enkhbold",
+    projectName: ProjectName.OPERATION,
+    canView: false,
+    canApprove: true,
+  },
+  {
+    phoneNumber: "99099511",
+    displayName: "Gantulga Enkhbold",
+    projectName: ProjectName.CONTRACTION,
+    canView: false,
+    canApprove: true,
+  },
+  {
+    phoneNumber: "99099511",
+    displayName: "Gantulga Enkhbold",
+    projectName: ProjectName.OTHER,
+    canView: false,
+    canApprove: true,
   },
   {
     phoneNumber: "99189432",
@@ -1527,6 +1625,7 @@ export const leaveRequestSeniorApproverAssignments = [
   [ProjectName.PROJECT, "99207244"],
   [ProjectName.PROJECT, "99547776"],
   [ProjectName.PROJECT, "90011911"],
+  [ProjectName.PROJECT, "99792201"],
   [ProjectName.UG, "99189432"],
   [ProjectName.UG, "88101740"],
   [ProjectName.UG, "99910199"],
@@ -1540,6 +1639,7 @@ export const leaveRequestSeniorApproverAssignments = [
   [ProjectName.UG, "99223115"],
   [ProjectName.UG, "88556353"],
   [ProjectName.UG, "99888634"],
+  [ProjectName.UG, "99890778"],
   [ProjectName.UG, "95252000"],
   [ProjectName.UG, "80660080"],
   [ProjectName.UG, "95958997"],
@@ -1571,13 +1671,23 @@ export const leaveRequestResponsibleHrAssignments = [
   [ProjectName.UG, "88078468"],
   [ProjectName.UG, "99031833"],
   [ProjectName.UG, "99009051"],
-  [ProjectName.UG, "99069343"],
   [ProjectName.OTHER, "99069343"],
+  [ProjectName.OTHER, "99393999"],
 ] as const satisfies ReadonlyArray<readonly [ProjectName, string]>;
 
 export const leaveRequestHrDirectorAssignments = [
   [ProjectName.UB, "99009051"],
   [ProjectName.UG, "99009051"],
+] as const satisfies ReadonlyArray<readonly [ProjectName, string]>;
+
+export const leaveRequestGeneralDirectorAssignments = [
+  [ProjectName.UG, "99099511"],
+  [ProjectName.UB, "99099511"],
+  [ProjectName.BAYAJUULAH, "99099511"],
+  [ProjectName.PROJECT, "99099511"],
+  [ProjectName.OPERATION, "99099511"],
+  [ProjectName.CONTRACTION, "99099511"],
+  [ProjectName.OTHER, "99099511"],
 ] as const satisfies ReadonlyArray<readonly [ProjectName, string]>;
 
 export const manualLeaveRequestApproverOverrides = [
@@ -1587,8 +1697,8 @@ export const manualLeaveRequestApproverOverrides = [
     projectName: ProjectName.UB,
   },
   {
-    phoneNumber: "99997802",
-    displayName: "Tsend-Ayush Nanzaddorj",
+    phoneNumber: "88116975",
+    displayName: "Bayarmunkh Tsend-Ayush",
     projectName: ProjectName.OTHER,
   },
   {
@@ -1600,6 +1710,60 @@ export const manualLeaveRequestApproverOverrides = [
   phoneNumber: string;
   displayName: string;
   projectName: ProjectName;
+}>;
+
+export const leaveRequestOtApproverAssignments = [
+  {
+    projectName: ProjectName.UG,
+    hrPhoneNumber: "88078468",
+    requesterPhoneNumbers: [
+      "85011606", "86940619", "86969664", "88094850", "88190462",
+      "88331397", "89248010", "89954104", "94776177", "95009832",
+      "95898381", "98985779", "99024196", "99125158",
+    ],
+  },
+  {
+    projectName: ProjectName.UG,
+    hrPhoneNumber: "99009051",
+    requesterPhoneNumbers: [
+      "69606029", "80004008", "80021142", "80308997", "80310830",
+      "80355343", "80490245", "80548819", "80604019", "80650804",
+      "80660080", "80698888", "80802530", "80868618", "83002335",
+      "85218080", "85251693", "85414417", "86000322", "86090933",
+      "86630330", "86660496", "86668632", "86720301", "86767694",
+      "86797917", "86940288", "88022926", "88023166", "88029418",
+      "88059225", "88136479", "88138065", "88179282", "88281124",
+      "88312454", "88363110", "88597994", "88604033", "88611866",
+      "88618862", "88623088", "88708229", "88767818", "88811540",
+      "88852331", "88935388", "89018987", "89136613", "89161103",
+      "89225208", "89293629", "89521919", "89993754", "91041127",
+      "91101210", "91611717", "91669161", "94944945", "94971351",
+      "95015645", "95122866", "95169891", "95449744", "95736001",
+      "95759957", "95776360", "95825819", "96166877", "96409644",
+      "99013140", "99016077", "99024301", "99060605", "99107708",
+      "99120731", "99146885", "99165683", "99189432", "99202734",
+      "99344065", "99361316", "99398090", "99409595", "99453352",
+      "99481319", "99494119", "99502113", "99502666", "99548430",
+      "99649592", "99843087", "99854795", "99958314", "99980840",
+    ],
+  },
+  {
+    projectName: ProjectName.UG,
+    hrPhoneNumber: "99031833",
+    requesterPhoneNumbers: [
+      "80104445", "80605261", "80704898", "80761111", "85450544",
+      "86869062", "86961234", "88004536", "88167466", "88184321",
+      "88272006", "88880520", "89191045", "89911004", "89991028",
+      "90886633", "90982998", "91684554", "94007636", "94745774",
+      "95072299", "95554228", "95724120", "99070935", "99192621",
+      "99367254", "99519544", "99638833", "99709010", "99718483",
+      "99759939", "99962654",
+    ],
+  },
+] as const satisfies ReadonlyArray<{
+  projectName: ProjectName;
+  hrPhoneNumber: string;
+  requesterPhoneNumbers: readonly string[];
 }>;
 
 export const employeeSeedSummary = {

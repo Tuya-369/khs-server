@@ -5,10 +5,14 @@ import {
   ProjectName,
 } from "@prisma/client";
 import {
+  constructionDepartmentPhoneNumbers,
   employeeProjectAssignments,
   employeeSeedSummary,
   leaveRequestAccessAssignments,
+  leaveRequestConstructionApproverAssignments,
   leaveRequestHrDirectorAssignments,
+  leaveRequestGeneralDirectorAssignments,
+  leaveRequestOtApproverAssignments,
   leaveRequestResponsibleHrAssignments,
   leaveRequestSeniorApproverAssignments,
   manualLeaveRequestApproverOverrides,
@@ -710,6 +714,12 @@ async function main() {
   const phoneNumbers = employeeProjectAssignments.map(
     ({ phoneNumber }) => phoneNumber,
   );
+  const projectByPhone = new Map(
+    employeeProjectAssignments.map(({ phoneNumber, projectName }) => [
+      phoneNumber,
+      projectName,
+    ]),
+  );
   const phoneNumbersByProject = new Map<ProjectName, string[]>();
   for (const assignment of employeeProjectAssignments) {
     const projectPhoneNumbers =
@@ -717,9 +727,9 @@ async function main() {
     projectPhoneNumbers.push(assignment.phoneNumber);
     phoneNumbersByProject.set(assignment.projectName, projectPhoneNumbers);
   }
-  const manualApproverProjects = new Set<ProjectName>(
+  const manualApproverKeys = new Set<string>(
     manualLeaveRequestApproverOverrides.map(
-      ({ projectName }) => projectName,
+      ({ phoneNumber, projectName }) => `${phoneNumber}|${projectName}`,
     ),
   );
   const approvalLevelsByKey = new Map<string, LeaveApprovalLevel>();
@@ -739,10 +749,21 @@ async function main() {
       LeaveApprovalLevel.HR_DIRECTOR,
     );
   }
+  for (const [projectName, phoneNumber] of leaveRequestGeneralDirectorAssignments) {
+    approvalLevelsByKey.set(
+      assignmentKey(phoneNumber, projectName),
+      LeaveApprovalLevel.GENERAL_DIRECTOR,
+    );
+  }
   for (const [projectName, phoneNumber] of leaveRequestResponsibleHrAssignments) {
     responsibleHrKeys.add(assignmentKey(phoneNumber, projectName));
   }
 
+  const constructionApproverKeys = new Set(
+    leaveRequestConstructionApproverAssignments.map(([projectName, phoneNumber]) =>
+      assignmentKey(phoneNumber, projectName),
+    ),
+  );
   const accessAssignmentsByKey = new Map<
     string,
     {
@@ -761,19 +782,19 @@ async function main() {
       assignment.projectName,
     );
     const isResponsibleHr = responsibleHrKeys.has(key);
+    const isConstructionApprover = constructionApproverKeys.has(key);
     const canApprove =
       isResponsibleHr ||
+      isConstructionApprover ||
       approvalLevelsByKey.has(key) ||
-      (manualApproverProjects.has(assignment.projectName)
-        ? false
-        : assignment.canApprove);
+      (manualApproverKeys.has(key) ? false : assignment.canApprove);
     accessAssignmentsByKey.set(key, {
       ...assignment,
       canView: assignment.canView || isResponsibleHr,
       canApprove,
       approvalLevel:
         approvalLevelsByKey.get(key) ??
-        (canApprove && !isResponsibleHr
+        (canApprove && !isResponsibleHr && !isConstructionApprover
           ? LeaveApprovalLevel.UNIT_MANAGER
           : null),
       isResponsibleHr,
@@ -809,18 +830,57 @@ async function main() {
   const syncedLeaveRequestAccess = Array.from(
     accessAssignmentsByKey.values(),
   );
+  const otApproverByRequesterPhone = new Map<string, string>();
+  for (const assignment of leaveRequestOtApproverAssignments) {
+    const hrKey = assignmentKey(
+      assignment.hrPhoneNumber,
+      assignment.projectName,
+    );
+    if (!accessAssignmentsByKey.get(hrKey)?.isResponsibleHr) {
+      throw new Error(
+        `Missing responsible HR access assignment for ${hrKey}.`,
+      );
+    }
+
+    for (const requesterPhoneNumber of assignment.requesterPhoneNumbers) {
+      if (projectByPhone.get(requesterPhoneNumber) !== assignment.projectName) {
+        throw new Error(
+          `OT leave requester ${requesterPhoneNumber} is not assigned to ${assignment.projectName}.`,
+        );
+      }
+      if (otApproverByRequesterPhone.has(requesterPhoneNumber)) {
+        throw new Error(
+          `Duplicate OT leave requester assignment for ${requesterPhoneNumber}.`,
+        );
+      }
+      otApproverByRequesterPhone.set(
+        requesterPhoneNumber,
+        assignment.hrPhoneNumber,
+      );
+    }
+  }
 
   await prisma.$transaction(
     async (transaction) => {
       await transaction.leaveRequestAccess.deleteMany();
       await transaction.whitelist.deleteMany();
       await transaction.whitelist.createMany({
-        data: employeeProjectAssignments.map(
-          ({ phoneNumber, projectName }) => ({
+        data: employeeProjectAssignments.map(({ phoneNumber, projectName }) => {
+          const approverPhoneNumber =
+            otApproverByRequesterPhone.get(phoneNumber);
+          return {
             phoneNumber,
             projectName,
-          }),
-        ),
+            isConstructionDepartment: (
+              constructionDepartmentPhoneNumbers as readonly string[]
+            ).includes(phoneNumber),
+            leaveRequestApproverOverrideName: approverPhoneNumber
+              ? "OT"
+              : null,
+            leaveRequestApproverOverridePhoneNumber:
+              approverPhoneNumber ?? null,
+          };
+        }),
       });
       await transaction.pendingRegistration.deleteMany({
         where: { phoneNumber: { notIn: phoneNumbers } },

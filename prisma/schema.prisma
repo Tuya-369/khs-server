@@ -74,6 +74,7 @@ enum LeaveApprovalLevel {
   SENIOR_SPECIALIST
   UNIT_MANAGER
   HR_DIRECTOR
+  GENERAL_DIRECTOR
 }
 model User {
   id                   String          @id @default(uuid())
@@ -305,6 +306,9 @@ model Whitelist {
   id          String      @id @default(uuid())
   phoneNumber String      @unique
   projectName ProjectName
+  leaveRequestApproverOverrideName        String?
+  leaveRequestApproverOverridePhoneNumber String?
+  isConstructionDepartment                Boolean     @default(false)
   leaveRequestAccess LeaveRequestAccess[]
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
