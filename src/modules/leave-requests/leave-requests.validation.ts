@@ -62,7 +62,18 @@ export const createLeaveRequestSchema = z.object({
 
 export const updateLeaveRequestStatusSchema = z.object({
   ...leaveRequestIdSchema.shape,
-  body: z.object({
-    status: z.enum(["APPROVED", "REJECTED"]),
-  }),
+  body: z
+    .object({
+      status: z.enum(["APPROVED", "REJECTED"]),
+      comment: z.string().trim().max(1000).optional(),
+    })
+    .superRefine((data, context) => {
+      if (data.status !== "REJECTED" || data.comment) return;
+
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Татгалзах шалтгаанаа бичнэ үү.",
+        path: ["comment"],
+      });
+    }),
 });

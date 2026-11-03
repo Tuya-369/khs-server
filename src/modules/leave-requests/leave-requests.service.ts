@@ -21,6 +21,8 @@ const DAY_IN_MILLISECONDS = 24 * 60 * 60 * 1000;
 
 type LeaveApprovalPeriod = "1_3" | "4_7" | "8_14" | "15_PLUS";
 
+const SYSTEM_NOTIFICATION_ONLY_APPROVER_PHONE = "99099511";
+
 const ALL_APPROVAL_PERIODS: readonly LeaveApprovalPeriod[] = [
   "1_3",
   "4_7",
@@ -34,7 +36,7 @@ const APPROVAL_PERIODS_BY_PROJECT: Partial<
   [ProjectName.UB]: {
     "99080190": ["1_3", "4_7", "8_14"],
     "99036907": ["1_3", "4_7", "8_14"],
-    "99099511": ["15_PLUS"],
+    [SYSTEM_NOTIFICATION_ONLY_APPROVER_PHONE]: ["15_PLUS"],
   },
   [ProjectName.UG]: {
     "99087813": ["1_3"],
@@ -48,7 +50,7 @@ const APPROVAL_PERIODS_BY_PROJECT: Partial<
     "88368206": ["4_7"],
     "88103163": ["4_7"],
     "99080190": ["8_14"],
-    "99099511": ["15_PLUS"],
+    [SYSTEM_NOTIFICATION_ONLY_APPROVER_PHONE]: ["15_PLUS"],
     "88093432": ALL_APPROVAL_PERIODS,
     "88078468": ALL_APPROVAL_PERIODS,
     "99031833": ALL_APPROVAL_PERIODS,
@@ -63,12 +65,12 @@ const APPROVAL_PERIODS_BY_PROJECT: Partial<
     "94111166": ["4_7"],
     "88098904": ["4_7"],
     "99080190": ["8_14"],
-    "99099511": ["15_PLUS"],
+    [SYSTEM_NOTIFICATION_ONLY_APPROVER_PHONE]: ["15_PLUS"],
   },
   [ProjectName.OTHER]: {
     "88116975": ["1_3", "4_7"],
     "99080190": ["8_14"],
-    "99099511": ["15_PLUS"],
+    [SYSTEM_NOTIFICATION_ONLY_APPROVER_PHONE]: ["15_PLUS"],
   },
   [ProjectName.OPERATION]: {
     "88989620": ["1_3"],
@@ -80,7 +82,7 @@ const APPROVAL_PERIODS_BY_PROJECT: Partial<
     "88800062": ["4_7"],
     "99992245": ["4_7"],
     "99080190": ["8_14"],
-    "99099511": ["15_PLUS"],
+    [SYSTEM_NOTIFICATION_ONLY_APPROVER_PHONE]: ["15_PLUS"],
   },
 };
 
@@ -260,17 +262,29 @@ export class LeaveRequestsService {
         ...(selectedHr ? [selectedHr.phoneNumber] : []),
       ]),
     );
+    const notificationPhoneNumbers = new Set(
+      reviewerPhoneNumbers.filter(
+        (phoneNumber) =>
+          phoneNumber !== SYSTEM_NOTIFICATION_ONLY_APPROVER_PHONE ||
+          phoneNumber === selectedApprover.phoneNumber,
+      ),
+    );
 
-    const recipients = await prisma.user.findMany({
-      where: {
-        isActive: true,
-        OR: [
-          { role: "SUPERADMIN" },
-          { phoneNumber: { in: reviewerPhoneNumbers } },
-        ],
-      },
-      select: { id: true, phoneNumber: true },
+    const reviewerUsers = await prisma.user.findMany({
+      where: { phoneNumber: { in: reviewerPhoneNumbers } },
+      select: { id: true, phoneNumber: true, role: true, isActive: true },
     });
+    const superAdminPhoneNumbers = new Set(
+      reviewerUsers
+        .filter(({ role }) => role === "SUPERADMIN")
+        .map(({ phoneNumber }) => phoneNumber),
+    );
+    const recipients = reviewerUsers.filter(
+      ({ isActive, phoneNumber, role }) =>
+        isActive &&
+        role !== "SUPERADMIN" &&
+        notificationPhoneNumbers.has(phoneNumber),
+    );
 
     if (recipients.length) {
       await prisma.notification.createMany({
@@ -284,12 +298,10 @@ export class LeaveRequestsService {
       });
     }
 
-    // SMS is sent to phone numbers directly, so approvers without a User account still receive it.
-    const smsPhoneNumbers = Array.from(
-      new Set([
-        ...reviewerPhoneNumbers,
-        ...recipients.map((recipient) => recipient.phoneNumber),
-      ]),
+    const smsPhoneNumbers = Array.from(new Set(reviewerPhoneNumbers)).filter(
+      (phoneNumber) =>
+        phoneNumber !== SYSTEM_NOTIFICATION_ONLY_APPROVER_PHONE &&
+        !superAdminPhoneNumbers.has(phoneNumber),
     );
     if (smsPhoneNumbers.length) {
       const smsText = `${requester.lastName} ${requester.firstName}-с чөлөөний хүсэлт ирсэн байна. Та систем рүү орж дэлгэрэнгүй харна уу`;
@@ -747,7 +759,7 @@ export class LeaveRequestsService {
     });
     if (!user) throw new AppError(404, "Хэрэглэгч олдсонгүй.");
 
-    if (user.role === "SUPERADMIN") return true;
+    if (user.role === "SUPERADMIN") return false;
 
     const access = await prisma.leaveRequestAccess.findFirst({
       where: {
@@ -769,19 +781,22 @@ export class LeaveRequestsService {
       where: { id: requestingUserId },
     });
     if (!requestingUser) throw new AppError(404, "Хэрэглэгч олдсонгүй.");
+    if (requestingUser.role === "SUPERADMIN") {
+      throw new AppError(
+        403,
+        "Танд чөлөөний хүсэлтүүдийг харах эрх байхгүй байна.",
+      );
+    }
 
-    const accessAssignments =
-      requestingUser.role === "SUPERADMIN"
-        ? []
-        : await prisma.leaveRequestAccess.findMany({
-            where: { phoneNumber: requestingUser.phoneNumber },
-            select: {
-              projectName: true,
-              canView: true,
-              canApprove: true,
-              isResponsibleHr: true,
-            },
-          });
+    const accessAssignments = await prisma.leaveRequestAccess.findMany({
+      where: { phoneNumber: requestingUser.phoneNumber },
+      select: {
+        projectName: true,
+        canView: true,
+        canApprove: true,
+        isResponsibleHr: true,
+      },
+    });
 
     const viewableProjects = new Set(
       accessAssignments
@@ -820,15 +835,14 @@ export class LeaveRequestsService {
       });
     }
 
-    if (requestingUser.role !== "SUPERADMIN" && scopeFilters.length === 0) {
+    if (scopeFilters.length === 0) {
       throw new AppError(
         403,
         "Танд чөлөөний хүсэлтүүдийг харах эрх байхгүй байна.",
       );
     }
 
-    const where: Prisma.LeaveRequestWhereInput =
-      requestingUser.role === "SUPERADMIN" ? {} : { OR: scopeFilters };
+    const where: Prisma.LeaveRequestWhereInput = { OR: scopeFilters };
 
     const leaveRequests = await prisma.leaveRequest.findMany({
       where,
@@ -862,8 +876,7 @@ export class LeaveRequestsService {
                 requestingUser.phoneNumber
               : leaveRequest.selectedApproverPhoneNumber ===
                 requestingUser.phoneNumber)
-          : requestingUser.role === "SUPERADMIN" ||
-            (projectAccess?.isResponsibleHr === true &&
+          : (projectAccess?.isResponsibleHr === true &&
               (leaveRequest.selectedHrPhoneNumber === null ||
                 leaveRequest.selectedHrPhoneNumber ===
                   requestingUser.phoneNumber)) ||
@@ -879,11 +892,18 @@ export class LeaveRequestsService {
     reviewerId: string,
     id: string,
     status: Extract<LeaveRequestStatus, "APPROVED" | "REJECTED">,
+    comment?: string,
   ) {
     const reviewer = await prisma.user.findUnique({
       where: { id: reviewerId },
     });
     if (!reviewer) throw new AppError(404, "Хэрэглэгч олдсонгүй.");
+    if (reviewer.role === "SUPERADMIN") {
+      throw new AppError(
+        403,
+        "Танд энэ хүсэлтийг шийдвэрлэх эрх байхгүй байна.",
+      );
+    }
 
     const leaveRequest = await prisma.leaveRequest.findUnique({
       where: { id },
@@ -915,7 +935,7 @@ export class LeaveRequestsService {
           "Танд энэ хүсэлтийг шийдвэрлэх эрх байхгүй байна.",
         );
       }
-    } else if (reviewer.role !== "SUPERADMIN") {
+    } else {
       const canApproveAsResponsibleHr =
         access?.isResponsibleHr === true &&
         (leaveRequest.selectedHrPhoneNumber === null ||
@@ -945,10 +965,13 @@ export class LeaveRequestsService {
     });
 
     const statusLabel = status === "APPROVED" ? "Зөвшөөрөгдлөө" : "Татгалзлаа";
+    const trimmedComment = comment?.trim();
     await this.notifications.create({
       userId: updatedLeaveRequest.userId,
       title: "Чөлөөний хүсэлтийн төлөв шинэчлэгдлээ",
-      message: `Таны чөлөөний хүсэлт ${statusLabel}.`,
+      message: trimmedComment
+        ? `Таны чөлөөний хүсэлт ${statusLabel}. Шийдвэрийн тайлбар: ${trimmedComment}`
+        : `Таны чөлөөний хүсэлт ${statusLabel}.`,
       type: "LEAVE_REQUEST",
       href: "/profile?tab=leave-request",
     });

@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 import { AppError } from "../errors/app-error";
 import { prisma } from "../utils/prisma";
+import { logger } from "../utils/logger";
 
 interface JwtPayload {
   userId: string;
@@ -31,7 +32,15 @@ export const authenticate = (
     const decoded = jwt.verify(
       token,
       process.env.JWT_ACCESS_SECRET || "access_secret",
-    ) as JwtPayload;
+    );
+    if (
+      typeof decoded !== "object" ||
+      decoded === null ||
+      typeof decoded.userId !== "string" ||
+      decoded.userId.length === 0
+    ) {
+      return next(new AppError(401, "Хүчингүй токен."));
+    }
 
     prisma.user
       .findUnique({
@@ -50,9 +59,15 @@ export const authenticate = (
         req.user = { userId: user.id, role: user.role };
         return next();
       })
-      .catch(() =>
-        next(new AppError(500, "Хэрэглэгчийн эрх шалгах үед алдаа гарлаа.")),
-      );
+      .catch((error: unknown) => {
+        logger.error("Authentication user lookup failed.", {
+          path: req.path,
+          error,
+        });
+        return next(
+          new AppError(500, "Хэрэглэгчийн эрх шалгах үед алдаа гарлаа."),
+        );
+      });
   } catch {
     return next(new AppError(401, "Хүчингүй эсвэл хугацаа нь дууссан токен."));
   }

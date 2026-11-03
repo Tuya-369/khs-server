@@ -109,6 +109,7 @@ router.patch(
         req.user!.userId,
         req.params.id,
         req.body.status,
+        req.body.comment,
       );
       res.json({ success: true, data: leaveRequest });
     } catch (error) {
