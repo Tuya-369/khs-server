@@ -20,6 +20,10 @@ export const createLeaveRequestSchema = z.object({
       selectedApproverPhoneNumber: z
         .string()
         .regex(/^\d{8}$/, "Батлагчийн дугаар буруу байна."),
+      selectedHrPhoneNumber: z
+        .string()
+        .regex(/^\d{8}$/, "ХН ажилтны дугаар буруу байна.")
+        .optional(),
       startDate: dateString,
       endDate: dateString,
       reason: z

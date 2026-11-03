@@ -266,6 +266,8 @@ model LeaveRequest {
   proofImageUrl String
   selectedApproverPhoneNumber String?
   selectedApproverName String?
+  selectedHrPhoneNumber String?
+  selectedHrName String?
   status       LeaveRequestStatus @default(PENDING)
   reviewedById String?
   reviewedBy   User?              @relation("ReviewedLeaveRequests", fields: [reviewedById], references: [id], onDelete: SetNull)

@@ -19,11 +19,93 @@ const LEAVE_TYPE_LABELS: Record<LeaveType, string> = {
 
 const DAY_IN_MILLISECONDS = 24 * 60 * 60 * 1000;
 
+type LeaveApprovalPeriod = "1_3" | "4_7" | "8_14" | "15_PLUS";
+
+const ALL_APPROVAL_PERIODS: readonly LeaveApprovalPeriod[] = [
+  "1_3",
+  "4_7",
+  "8_14",
+  "15_PLUS",
+];
+
+const APPROVAL_PERIODS_BY_PROJECT: Partial<
+  Record<ProjectName, Readonly<Record<string, readonly LeaveApprovalPeriod[]>>>
+> = {
+  [ProjectName.UB]: {
+    "99080190": ["1_3", "4_7", "8_14"],
+    "99036907": ["1_3", "4_7", "8_14"],
+    "99099511": ["15_PLUS"],
+  },
+  [ProjectName.UG]: {
+    "99087813": ["1_3"],
+    "99223115": ["1_3"],
+    "99566564": ["1_3"],
+    "94137227": ["1_3"],
+    "99772772": ["1_3"],
+    "99888634": ["1_3"],
+    "99905440": ["4_7"],
+    "89001198": ["4_7"],
+    "88368206": ["4_7"],
+    "88103163": ["4_7"],
+    "99080190": ["8_14"],
+    "99099511": ["15_PLUS"],
+    "88093432": ALL_APPROVAL_PERIODS,
+    "88078468": ALL_APPROVAL_PERIODS,
+    "99031833": ALL_APPROVAL_PERIODS,
+    "99009051": ALL_APPROVAL_PERIODS,
+  },
+  [ProjectName.PROJECT]: {
+    "90901077": ["1_3"],
+    "94050002": ["1_3"],
+    "88036504": ["1_3"],
+    "99176210": ["1_3"],
+    "99792201": ["1_3"],
+    "94111166": ["4_7"],
+    "88098904": ["4_7"],
+    "99080190": ["8_14"],
+    "99099511": ["15_PLUS"],
+  },
+  [ProjectName.OTHER]: {
+    "88116975": ["1_3", "4_7"],
+    "99080190": ["8_14"],
+    "99099511": ["15_PLUS"],
+  },
+  [ProjectName.OPERATION]: {
+    "88989620": ["1_3"],
+    "99532332": ["1_3"],
+    "80021275": ["1_3"],
+    "88051137": ["1_3"],
+    "89100229": ["1_3"],
+    "95433838": ["1_3"],
+    "88800062": ["4_7"],
+    "99992245": ["4_7"],
+    "99080190": ["8_14"],
+    "99099511": ["15_PLUS"],
+  },
+};
+
+function getLeaveApprovalPeriod(workingDays: number): LeaveApprovalPeriod {
+  if (workingDays <= 3) return "1_3";
+  if (workingDays <= 7) return "4_7";
+  if (workingDays <= 14) return "8_14";
+  return "15_PLUS";
+}
+
+function getApprovalPeriods(
+  projectName: ProjectName,
+  phoneNumber: string,
+): readonly LeaveApprovalPeriod[] | undefined {
+  const projectPeriods = APPROVAL_PERIODS_BY_PROJECT[projectName];
+  if (!projectPeriods) return undefined;
+  return projectPeriods[phoneNumber] ?? [];
+}
+
 type LeaveRequestApprovalInput = {
   durationType: LeaveDurationType;
   startDate: string;
   endDate: string;
   selectedApproverPhoneNumber: string;
+  selectedHrPhoneNumber?: string;
 };
 
 type LeaveRequestApproverOverride = {
@@ -93,23 +175,9 @@ function countWorkingDays(startDate: Date, endDate: Date) {
   return count;
 }
 
-const HR_WINDOW_MAX_WORKING_DAYS = 14;
-
 // Барилгын хэлтсийн хүсэлтийн батлагч: 1–3 хоног → Bayarmunkh, 4–14 хоног → Erdenezul (HR).
 const CONSTRUCTION_SHORT_LEAVE_APPROVER = "88116975";
 const CONSTRUCTION_LONG_LEAVE_APPROVER = "99009051";
-
-function isWithinHrWindow(leaveRequest: {
-  durationType: LeaveDurationType;
-  startDate: Date;
-  endDate: Date;
-}) {
-  return (
-    leaveRequest.durationType !== LeaveDurationType.DAILY ||
-    countWorkingDays(leaveRequest.startDate, leaveRequest.endDate) <=
-      HR_WINDOW_MAX_WORKING_DAYS
-  );
-}
 
 function hasStartDateArrived(startDate: Date) {
   const today = new Intl.DateTimeFormat("en-CA", {
@@ -131,6 +199,7 @@ export class LeaveRequestsService {
       reason: string;
       proofImageUrl: string;
       selectedApproverPhoneNumber: string;
+      selectedHrPhoneNumber?: string;
     },
   ) {
     const requester = await prisma.user.findUnique({ where: { id: userId } });
@@ -148,6 +217,11 @@ export class LeaveRequestsService {
       approverOverride,
       isConstructionDepartment,
     );
+    const selectedHr = await this.resolveSelectedHr(
+      requester.ProjectName,
+      input.selectedHrPhoneNumber,
+      approverOverride,
+    );
 
     const leaveRequest = await prisma.leaveRequest.create({
       data: {
@@ -160,23 +234,30 @@ export class LeaveRequestsService {
         proofImageUrl: input.proofImageUrl,
         selectedApproverPhoneNumber: selectedApprover.phoneNumber,
         selectedApproverName: selectedApprover.displayName,
+        selectedHrPhoneNumber: selectedHr?.phoneNumber ?? null,
+        selectedHrName: selectedHr?.displayName ?? null,
       },
     });
 
-    // Notify project reviewers, the selected approver, and SUPERADMIN.
-    const reviewerAssignments = await prisma.leaveRequestAccess.findMany({
-      where: {
-        projectName: requester.ProjectName,
-        ...(selectedApprover.displayName === "OT"
-          ? { OR: [{ canView: true }, { canApprove: true }] }
-          : { canView: true }),
-      },
-      select: { phoneNumber: true },
-    });
+    // Bayaajuulah notifies its selected approver and HR; other projects notify reviewers.
+    const isBayaajuulah = requester.ProjectName === ProjectName.BAYAJUULAH;
+    const reviewerAssignments = isBayaajuulah
+      ? []
+      : await prisma.leaveRequestAccess.findMany({
+          where: {
+            projectName: requester.ProjectName,
+            isResponsibleHr: false,
+            ...(selectedApprover.displayName === "OT"
+              ? { OR: [{ canView: true }, { canApprove: true }] }
+              : { canView: true }),
+          },
+          select: { phoneNumber: true },
+        });
     const reviewerPhoneNumbers = Array.from(
       new Set([
         ...reviewerAssignments.map(({ phoneNumber }) => phoneNumber),
         selectedApprover.phoneNumber,
+        ...(selectedHr ? [selectedHr.phoneNumber] : []),
       ]),
     );
 
@@ -240,6 +321,11 @@ export class LeaveRequestsService {
       approverOverride,
       isConstructionDepartment,
     );
+    await this.resolveSelectedHr(
+      requester.ProjectName,
+      input.selectedHrPhoneNumber,
+      approverOverride,
+    );
   }
 
   private async getLeaveRequestApproverOverride(
@@ -254,15 +340,20 @@ export class LeaveRequestsService {
     });
     if (!whitelistEntry) return null;
 
-    const { leaveRequestApproverOverrideName, leaveRequestApproverOverridePhoneNumber } =
-      whitelistEntry;
+    const {
+      leaveRequestApproverOverrideName,
+      leaveRequestApproverOverridePhoneNumber,
+    } = whitelistEntry;
     if (
       leaveRequestApproverOverrideName === null &&
       leaveRequestApproverOverridePhoneNumber === null
     ) {
       return null;
     }
-    if (!leaveRequestApproverOverrideName || !leaveRequestApproverOverridePhoneNumber) {
+    if (
+      !leaveRequestApproverOverrideName ||
+      !leaveRequestApproverOverridePhoneNumber
+    ) {
       throw new AppError(
         500,
         "Чөлөөний батлагчийн тусгай тохиргоо буруу байна.",
@@ -285,6 +376,69 @@ export class LeaveRequestsService {
     return whitelistEntry?.isConstructionDepartment ?? false;
   }
 
+  private async getResponsibleHrApprovers(projectName: ProjectName) {
+    return prisma.leaveRequestAccess.findMany({
+      where: { projectName, isResponsibleHr: true },
+      select: {
+        phoneNumber: true,
+        displayName: true,
+        approvalLevel: true,
+        isResponsibleHr: true,
+      },
+      orderBy: { displayName: "asc" },
+    });
+  }
+
+  private async resolveSelectedHr(
+    projectName: ProjectName,
+    selectedHrPhoneNumber?: string,
+    approverOverride?: LeaveRequestApproverOverride | null,
+  ) {
+    if (
+      approverOverride &&
+      selectedHrPhoneNumber !== undefined &&
+      selectedHrPhoneNumber !== approverOverride.phoneNumber
+    ) {
+      throw new AppError(
+        400,
+        "Сонгосон ХН ажилтан тухайн ажилтны тохиргоонд байхгүй байна.",
+      );
+    }
+
+    const hrApprovers = await this.getResponsibleHrApprovers(projectName);
+    const requestedPhoneNumber =
+      approverOverride?.phoneNumber ?? selectedHrPhoneNumber;
+
+    if (hrApprovers.length === 0) {
+      if (requestedPhoneNumber) {
+        throw new AppError(
+          400,
+          "Тухайн хэлтсийн ХН хариуцагч бүртгэгдээгүй байна.",
+        );
+      }
+      return null;
+    }
+
+    if (!requestedPhoneNumber) {
+      if (hrApprovers.length > 1) {
+        throw new AppError(400, "Хүний нөөцийн ажилтан сонгоно уу.");
+      }
+      return hrApprovers[0];
+    }
+
+    const selectedHr = hrApprovers.find(
+      ({ phoneNumber }) => phoneNumber === requestedPhoneNumber,
+    );
+    if (!selectedHr) {
+      throw new AppError(
+        400,
+        "Сонгосон ХН ажилтан тухайн хэлтсийн ХН хариуцагч биш байна.",
+      );
+    }
+
+    return selectedHr;
+  }
+
   private async resolveApprovalTarget(
     projectName: ProjectName,
     input: LeaveRequestApprovalInput,
@@ -299,10 +453,15 @@ export class LeaveRequestsService {
           approverOverride,
         );
       }
-      return this.getAssignedApprover(
+      const approver = await this.getAssignedApprover(
         projectName,
         input.selectedApproverPhoneNumber,
       );
+      const hrApprovers = await this.getResponsibleHrApprovers(projectName);
+      if (hrApprovers.length > 1 && approver.isResponsibleHr) {
+        throw new AppError(400, "ХН ажилтныг тусдаа сонголтоос сонгоно уу.");
+      }
+      return approver;
     }
 
     const startDate = getCalendarDate(input.startDate);
@@ -337,20 +496,32 @@ export class LeaveRequestsService {
       );
     }
 
+    const hrApprovers = await this.getResponsibleHrApprovers(projectName);
+    const requiresHrSelection = hrApprovers.length > 1;
+
     if (
       isConstructionDepartment &&
       projectName === ProjectName.UB &&
       workingDays <= 14
     ) {
       const requiredApproverPhoneNumber =
-        workingDays <= 3 ? CONSTRUCTION_SHORT_LEAVE_APPROVER : CONSTRUCTION_LONG_LEAVE_APPROVER;
+        workingDays <= 3
+          ? CONSTRUCTION_SHORT_LEAVE_APPROVER
+          : CONSTRUCTION_LONG_LEAVE_APPROVER;
       if (input.selectedApproverPhoneNumber !== requiredApproverPhoneNumber) {
         throw new AppError(
           400,
           "Сонгосон батлагч барилгын хэлтсийн хүсэлтийн дүрэмд тохирохгүй байна.",
         );
       }
-      return this.getAssignedApprover(projectName, requiredApproverPhoneNumber);
+      const approver = await this.getAssignedApprover(
+        projectName,
+        requiredApproverPhoneNumber,
+      );
+      if (requiresHrSelection && approver.isResponsibleHr) {
+        throw new AppError(400, "ХН ажилтныг тусдаа сонголтоос сонгоно уу.");
+      }
+      return approver;
     }
 
     const projectApprovers = await prisma.leaveRequestAccess.findMany({
@@ -367,9 +538,21 @@ export class LeaveRequestsService {
     let eligibleApprovers: Array<{
       phoneNumber: string;
       displayName: string;
+      isResponsibleHr: boolean;
     }>;
 
-    if (workingDays <= 3) {
+    const projectApprovalPeriods = APPROVAL_PERIODS_BY_PROJECT[projectName];
+    if (projectApprovalPeriods) {
+      const approvalPeriod = getLeaveApprovalPeriod(workingDays);
+      const eligiblePhoneNumbers = new Set(
+        Object.entries(projectApprovalPeriods)
+          .filter(([, periods]) => periods.includes(approvalPeriod))
+          .map(([phoneNumber]) => phoneNumber),
+      );
+      eligibleApprovers = projectApprovers.filter(({ phoneNumber }) =>
+        eligiblePhoneNumbers.has(phoneNumber),
+      );
+    } else if (workingDays <= 3) {
       const seniorSpecialists = projectApprovers.filter(
         ({ approvalLevel }) =>
           approvalLevel === LeaveApprovalLevel.SENIOR_SPECIALIST,
@@ -387,11 +570,13 @@ export class LeaveRequestsService {
           approvalLevel === LeaveApprovalLevel.UNIT_MANAGER,
       );
     } else if (workingDays <= 14) {
-      eligibleApprovers = projectApprovers.filter(
-        ({ approvalLevel, isResponsibleHr }) =>
-          approvalLevel === LeaveApprovalLevel.HR_DIRECTOR ||
-          isResponsibleHr,
+      const hrDirectors = projectApprovers.filter(
+        ({ approvalLevel }) => approvalLevel === LeaveApprovalLevel.HR_DIRECTOR,
       );
+      eligibleApprovers =
+        hrDirectors.length > 0
+          ? hrDirectors
+          : projectApprovers.filter(({ isResponsibleHr }) => isResponsibleHr);
     } else {
       eligibleApprovers = projectApprovers.filter(
         ({ approvalLevel }) =>
@@ -399,9 +584,16 @@ export class LeaveRequestsService {
       );
     }
 
+    if (requiresHrSelection) {
+      eligibleApprovers = eligibleApprovers.filter(
+        ({ isResponsibleHr }) => !isResponsibleHr,
+      );
+    }
+
     if (eligibleApprovers.length === 0) {
-      const message =
-        workingDays <= 7
+      const message = projectApprovalPeriods
+        ? "Тухайн хэлтсийн энэ хугацааны батлагч бүртгэгдээгүй байна."
+        : workingDays <= 7
           ? "Тухайн төслийн шаардлагатай ахлах ажилтан эсвэл нэгжийн удирдлага бүртгэгдээгүй байна."
           : workingDays <= 14
             ? "Тухайн төслийн ХН хариуцагч бүртгэгдээгүй байна."
@@ -410,8 +602,7 @@ export class LeaveRequestsService {
     }
 
     const approver = eligibleApprovers.find(
-      ({ phoneNumber }) =>
-        phoneNumber === input.selectedApproverPhoneNumber,
+      ({ phoneNumber }) => phoneNumber === input.selectedApproverPhoneNumber,
     );
     if (!approver) {
       throw new AppError(
@@ -453,7 +644,12 @@ export class LeaveRequestsService {
       where: {
         phoneNumber_projectName: { phoneNumber, projectName },
       },
-      select: { phoneNumber: true, displayName: true, canApprove: true },
+      select: {
+        phoneNumber: true,
+        displayName: true,
+        canApprove: true,
+        isResponsibleHr: true,
+      },
     });
 
     if (!approver?.canApprove) {
@@ -480,31 +676,61 @@ export class LeaveRequestsService {
         requester.ProjectName,
         approverOverride.phoneNumber,
       );
-      return [
-        {
-          phoneNumber: approver.phoneNumber,
-          displayName: approverOverride.displayName,
-          approvalLevel: "OT" as const,
-          isResponsibleHr: true,
-        },
-      ];
+      return {
+        items: [
+          {
+            phoneNumber: approver.phoneNumber,
+            displayName: approverOverride.displayName,
+            approvalLevel: "OT" as const,
+            isResponsibleHr: true,
+          },
+        ],
+        hrItems: [],
+        requiresHrSelection: false,
+      };
     }
 
-    const accessApprovers = await prisma.leaveRequestAccess.findMany({
-      where: {
-        projectName: requester.ProjectName,
-        canApprove: true,
-      },
-      select: {
-        phoneNumber: true,
-        displayName: true,
-        approvalLevel: true,
-        isResponsibleHr: true,
-      },
-      orderBy: { displayName: "asc" },
-    });
+    const [accessApprovers, responsibleHrApprovers] = await Promise.all([
+      prisma.leaveRequestAccess.findMany({
+        where: {
+          projectName: requester.ProjectName,
+          canApprove: true,
+        },
+        select: {
+          phoneNumber: true,
+          displayName: true,
+          approvalLevel: true,
+          isResponsibleHr: true,
+        },
+        orderBy: { displayName: "asc" },
+      }),
+      this.getResponsibleHrApprovers(requester.ProjectName),
+    ]);
 
-    return accessApprovers;
+    const hrItems = responsibleHrApprovers.map((approver) => ({
+      ...approver,
+      approvalPeriods: getApprovalPeriods(
+        requester.ProjectName,
+        approver.phoneNumber,
+      ),
+    }));
+    const requiresHrSelection = hrItems.length > 1;
+
+    return {
+      items: accessApprovers
+        .filter(
+          ({ isResponsibleHr }) => !requiresHrSelection || !isResponsibleHr,
+        )
+        .map((approver) => ({
+          ...approver,
+          approvalPeriods: getApprovalPeriods(
+            requester.ProjectName,
+            approver.phoneNumber,
+          ),
+        })),
+      hrItems,
+      requiresHrSelection,
+    };
   }
 
   async getMine(userId: string) {
@@ -526,7 +752,11 @@ export class LeaveRequestsService {
     const access = await prisma.leaveRequestAccess.findFirst({
       where: {
         phoneNumber: user.phoneNumber,
-        OR: [{ canView: true }, { canApprove: true }],
+        OR: [
+          { canView: true },
+          { canApprove: true },
+          { isResponsibleHr: true },
+        ],
       },
       select: { phoneNumber: true },
     });
@@ -555,7 +785,10 @@ export class LeaveRequestsService {
 
     const viewableProjects = new Set(
       accessAssignments
-        .filter(({ canView }) => canView)
+        .filter(
+          ({ canView, canApprove, isResponsibleHr }) =>
+            canView || canApprove || isResponsibleHr,
+        )
         .map(({ projectName }) => projectName),
     );
     const approvableProjects = new Set(
@@ -617,28 +850,23 @@ export class LeaveRequestsService {
       orderBy: { createdAt: "desc" },
     });
 
-    const visibleLeaveRequests =
-      requestingUser.role === "SUPERADMIN"
-        ? leaveRequests
-        : leaveRequests.filter(
-            (leaveRequest) =>
-              isWithinHrWindow(leaveRequest) ||
-              leaveRequest.selectedApproverPhoneNumber ===
-                requestingUser.phoneNumber,
-          );
-
-    return visibleLeaveRequests.map(({ user, ...leaveRequest }) => {
+    return leaveRequests.map(({ user, ...leaveRequest }) => {
       const projectAccess = accessAssignments.find(
         ({ projectName }) => projectName === user.ProjectName,
       );
       const canApprove =
         leaveRequest.selectedApproverName === "OT"
-          ? leaveRequest.selectedApproverPhoneNumber ===
-              requestingUser.phoneNumber &&
-            projectAccess?.isResponsibleHr === true
+          ? projectAccess?.isResponsibleHr === true &&
+            (leaveRequest.selectedHrPhoneNumber !== null
+              ? leaveRequest.selectedHrPhoneNumber ===
+                requestingUser.phoneNumber
+              : leaveRequest.selectedApproverPhoneNumber ===
+                requestingUser.phoneNumber)
           : requestingUser.role === "SUPERADMIN" ||
             (projectAccess?.isResponsibleHr === true &&
-              isWithinHrWindow(leaveRequest)) ||
+              (leaveRequest.selectedHrPhoneNumber === null ||
+                leaveRequest.selectedHrPhoneNumber ===
+                  requestingUser.phoneNumber)) ||
             (projectAccess?.canApprove === true &&
               leaveRequest.selectedApproverPhoneNumber ===
                 requestingUser.phoneNumber);
@@ -677,8 +905,10 @@ export class LeaveRequestsService {
     });
     if (leaveRequest.selectedApproverName === "OT") {
       const canApproveOtRequest =
-        reviewer.phoneNumber === leaveRequest.selectedApproverPhoneNumber &&
-        access?.isResponsibleHr === true;
+        access?.isResponsibleHr === true &&
+        (leaveRequest.selectedHrPhoneNumber !== null
+          ? leaveRequest.selectedHrPhoneNumber === reviewer.phoneNumber
+          : leaveRequest.selectedApproverPhoneNumber === reviewer.phoneNumber);
       if (!canApproveOtRequest) {
         throw new AppError(
           403,
@@ -688,7 +918,8 @@ export class LeaveRequestsService {
     } else if (reviewer.role !== "SUPERADMIN") {
       const canApproveAsResponsibleHr =
         access?.isResponsibleHr === true &&
-        isWithinHrWindow(leaveRequest);
+        (leaveRequest.selectedHrPhoneNumber === null ||
+          leaveRequest.selectedHrPhoneNumber === reviewer.phoneNumber);
       const canApproveAsSelectedManager =
         access?.canApprove === true &&
         leaveRequest.selectedApproverPhoneNumber === reviewer.phoneNumber;

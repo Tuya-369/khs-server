@@ -23,7 +23,6 @@ const projectNameSchema = z.enum([
   "BAYAJUULAH",
   "PROJECT",
   "OPERATION",
-  "CONTRACTION",
 ]);
 
 export const registerSchema = z.object({

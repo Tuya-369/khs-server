@@ -32,6 +32,7 @@ router.post(
           endDate: req.body.endDate,
           selectedApproverPhoneNumber:
             req.body.selectedApproverPhoneNumber,
+          selectedHrPhoneNumber: req.body.selectedHrPhoneNumber,
         },
       );
       const proofImageUrl = await uploadToCloudinary(req.file);
@@ -66,9 +67,10 @@ router.get("/mine", authenticate, async (req, res, next) => {
 
 router.get("/approvers", authenticate, async (req, res, next) => {
   try {
+    const approvers = await service.getApprovers(req.user!.userId);
     res.json({
       success: true,
-      data: { items: await service.getApprovers(req.user!.userId) },
+      data: approvers,
     });
   } catch (error) {
     next(error);
