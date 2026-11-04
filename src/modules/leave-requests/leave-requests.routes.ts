@@ -20,10 +20,6 @@ router.post(
   validate(createLeaveRequestSchema),
   async (req, res, next) => {
     try {
-      if (!req.file) {
-        throw new AppError(400, "Баталгаажуулах зураг оруулна уу.");
-      }
-
       await service.validateApproverForRequest(
         req.user!.userId,
         {
@@ -33,14 +29,18 @@ router.post(
           selectedApproverPhoneNumber:
             req.body.selectedApproverPhoneNumber,
           selectedHrPhoneNumber: req.body.selectedHrPhoneNumber,
+          selectedManagerPhoneNumber: req.body.selectedManagerPhoneNumber,
         },
       );
-      const proofImageUrl = await uploadToCloudinary(req.file);
-      if (!proofImageUrl) {
-        throw new AppError(
-          400,
-          "Зураг амжилттай хуулж чадсангүй. Дахин оролдоно уу.",
-        );
+      let proofImageUrl: string | undefined;
+      if (req.file) {
+        proofImageUrl = (await uploadToCloudinary(req.file)) ?? undefined;
+        if (!proofImageUrl) {
+          throw new AppError(
+            400,
+            "Зураг амжилттай хуулж чадсангүй. Дахин оролдоно уу.",
+          );
+        }
       }
 
       const leaveRequest = await service.createLeaveRequest(req.user!.userId, {

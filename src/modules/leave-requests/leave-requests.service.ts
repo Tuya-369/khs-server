@@ -5,6 +5,7 @@ import {
   LeaveType,
   ProjectName,
   LeaveApprovalLevel,
+  LeaveRequestStage,
 } from "@prisma/client";
 import { AppError } from "../../errors/app-error";
 import { prisma } from "../../utils/prisma";
@@ -108,6 +109,7 @@ type LeaveRequestApprovalInput = {
   endDate: string;
   selectedApproverPhoneNumber: string;
   selectedHrPhoneNumber?: string;
+  selectedManagerPhoneNumber?: string;
 };
 
 type LeaveRequestApproverOverride = {
@@ -119,6 +121,47 @@ type ResolvedLeaveRequestApprover = {
   displayName: string;
   phoneNumber: string;
 };
+
+// stageSequence нь хүсэлтийн бүх шатыг дарааллаар агуулна. selectedApprover нь эхний шатны батлагч.
+type StagedLeaveRoute = {
+  stageSequence: LeaveRequestStage[];
+  selectedApprover: ResolvedLeaveRequestApprover;
+  selectedHr: ResolvedLeaveRequestApprover | null;
+  manager: ResolvedLeaveRequestApprover | null;
+  finalApprover: ResolvedLeaveRequestApprover | null;
+};
+
+// Шат бүр тусдаа талбарт хадгалагдсан батлагчтай тохирно.
+function getStageReviewerPhoneNumber(leaveRequest: {
+  currentStage: LeaveRequestStage | null;
+  selectedApproverPhoneNumber: string | null;
+  managerPhoneNumber: string | null;
+  selectedHrPhoneNumber: string | null;
+  finalApproverPhoneNumber: string | null;
+}) {
+  switch (leaveRequest.currentStage) {
+    case "FIRST_APPROVER_REVIEW":
+      return leaveRequest.selectedApproverPhoneNumber;
+    case "SECOND_APPROVER_REVIEW":
+      return leaveRequest.managerPhoneNumber;
+    case "HR_REVIEW":
+      return leaveRequest.selectedHrPhoneNumber;
+    case "FINAL_APPROVER_REVIEW":
+      return leaveRequest.finalApproverPhoneNumber;
+    default:
+      return null;
+  }
+}
+
+function getNextStage(leaveRequest: {
+  currentStage: LeaveRequestStage | null;
+  stageSequence: LeaveRequestStage[];
+}) {
+  if (!leaveRequest.currentStage) return null;
+  const index = leaveRequest.stageSequence.indexOf(leaveRequest.currentStage);
+  if (index === -1) return null;
+  return leaveRequest.stageSequence[index + 1] ?? null;
+}
 
 function getCalendarDate(value: string) {
   const dateParts = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
@@ -181,6 +224,31 @@ function countWorkingDays(startDate: Date, endDate: Date) {
 const CONSTRUCTION_SHORT_LEAVE_APPROVER = "88116975";
 const CONSTRUCTION_LONG_LEAVE_APPROVER = "99009051";
 
+// 8–14 хоногийн эцсийн батлагч болон ХН, менежер, ахлахын хүсэлтийн эцсийн батлагч.
+const HR_DIRECTOR_FINAL_APPROVER = {
+  phoneNumber: "99080190",
+  displayName: "Bilguun Ganbold",
+};
+
+// UB-ийн хэлтсийн HR болон батлагчийн дүрэм: HR (Erdenezul) эхлээд хянана, дараа нь батлагч батална.
+const UB_CONSTRUCTION_HR_PHONE = "99009051";
+const UB_CONSTRUCTION_APPROVER_PHONE = "88116975";
+const UB_HR_DEPARTMENT_PHONES = [
+  "99009051",
+  "99031833",
+  "88078468",
+  "88093432",
+  "99097083",
+  "98111734",
+  "99393999",
+  "99069343",
+  "99399797",
+  "85121254",
+  "94777079",
+];
+const UB_HR_DEPARTMENT_APPROVER_PHONE = "99080190";
+const UB_DIRECT_APPROVER_PHONES = ["99036907", "99080190", "88116975"];
+
 function hasStartDateArrived(startDate: Date) {
   const today = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Ulaanbaatar",
@@ -199,9 +267,10 @@ export class LeaveRequestsService {
       startDate: string;
       endDate: string;
       reason: string;
-      proofImageUrl: string;
+      proofImageUrl?: string;
       selectedApproverPhoneNumber: string;
       selectedHrPhoneNumber?: string;
+      selectedManagerPhoneNumber?: string;
     },
   ) {
     const requester = await prisma.user.findUnique({ where: { id: userId } });
@@ -210,20 +279,29 @@ export class LeaveRequestsService {
     const approverOverride = await this.getLeaveRequestApproverOverride(
       requester.phoneNumber,
     );
+    const stagedRoute = await this.planStagedRoute(
+      requester,
+      input,
+      approverOverride,
+    );
     const isConstructionDepartment = await this.getIsConstructionDepartment(
       requester.phoneNumber,
     );
-    const selectedApprover = await this.resolveApprovalTarget(
-      requester.ProjectName,
-      input,
-      approverOverride,
-      isConstructionDepartment,
-    );
-    const selectedHr = await this.resolveSelectedHr(
-      requester.ProjectName,
-      input.selectedHrPhoneNumber,
-      approverOverride,
-    );
+    const selectedApprover =
+      stagedRoute?.selectedApprover ??
+      (await this.resolveApprovalTarget(
+        requester.ProjectName,
+        input,
+        approverOverride,
+        isConstructionDepartment,
+      ));
+    const selectedHr = stagedRoute
+      ? stagedRoute.selectedHr
+      : await this.resolveSelectedHr(
+          requester.ProjectName,
+          input.selectedHrPhoneNumber,
+          approverOverride,
+        );
 
     const leaveRequest = await prisma.leaveRequest.create({
       data: {
@@ -233,33 +311,42 @@ export class LeaveRequestsService {
         startDate: new Date(input.startDate),
         endDate: new Date(input.endDate),
         reason: input.reason,
-        proofImageUrl: input.proofImageUrl,
+        proofImageUrl: input.proofImageUrl ?? null,
         selectedApproverPhoneNumber: selectedApprover.phoneNumber,
         selectedApproverName: selectedApprover.displayName,
         selectedHrPhoneNumber: selectedHr?.phoneNumber ?? null,
         selectedHrName: selectedHr?.displayName ?? null,
+        stageSequence: stagedRoute?.stageSequence ?? [],
+        currentStage: stagedRoute?.stageSequence[0] ?? null,
+        managerPhoneNumber: stagedRoute?.manager?.phoneNumber ?? null,
+        managerName: stagedRoute?.manager?.displayName ?? null,
+        finalApproverPhoneNumber:
+          stagedRoute?.finalApprover?.phoneNumber ?? null,
+        finalApproverName: stagedRoute?.finalApprover?.displayName ?? null,
       },
     });
 
     // Bayaajuulah notifies its selected approver and HR; other projects notify reviewers.
+    // Шатлалтай урсгалд зөвхөн тухайн шатны батлагч мэдэгдэл авна.
     const isBayaajuulah = requester.ProjectName === ProjectName.BAYAJUULAH;
-    const reviewerAssignments = isBayaajuulah
-      ? []
-      : await prisma.leaveRequestAccess.findMany({
-          where: {
-            projectName: requester.ProjectName,
-            isResponsibleHr: false,
-            ...(selectedApprover.displayName === "OT"
-              ? { OR: [{ canView: true }, { canApprove: true }] }
-              : { canView: true }),
-          },
-          select: { phoneNumber: true },
-        });
+    const reviewerAssignments =
+      isBayaajuulah || stagedRoute
+        ? []
+        : await prisma.leaveRequestAccess.findMany({
+            where: {
+              projectName: requester.ProjectName,
+              isResponsibleHr: false,
+              ...(selectedApprover.displayName === "OT"
+                ? { OR: [{ canView: true }, { canApprove: true }] }
+                : { canView: true }),
+            },
+            select: { phoneNumber: true },
+          });
     const reviewerPhoneNumbers = Array.from(
       new Set([
         ...reviewerAssignments.map(({ phoneNumber }) => phoneNumber),
         selectedApprover.phoneNumber,
-        ...(selectedHr ? [selectedHr.phoneNumber] : []),
+        ...(selectedHr && !stagedRoute ? [selectedHr.phoneNumber] : []),
       ]),
     );
     const notificationPhoneNumbers = new Set(
@@ -324,6 +411,13 @@ export class LeaveRequestsService {
     const approverOverride = await this.getLeaveRequestApproverOverride(
       requester.phoneNumber,
     );
+    const stagedRoute = await this.planStagedRoute(
+      requester,
+      input,
+      approverOverride,
+    );
+    if (stagedRoute) return;
+
     const isConstructionDepartment = await this.getIsConstructionDepartment(
       requester.phoneNumber,
     );
@@ -338,6 +432,336 @@ export class LeaveRequestsService {
       input.selectedHrPhoneNumber,
       approverOverride,
     );
+  }
+
+  // Менежер, ахлахын хүсэлтийг ХН → Bilguun; бусад DAILY 1–14 хүсэлтийг шатлалтай төлөвлөнө.
+  private async planStagedRoute(
+    requester: { phoneNumber: string; ProjectName: ProjectName },
+    input: LeaveRequestApprovalInput,
+    approverOverride: LeaveRequestApproverOverride | null,
+  ): Promise<StagedLeaveRoute | null> {
+    const requesterAccess = await prisma.leaveRequestAccess.findUnique({
+      where: {
+        phoneNumber_projectName: {
+          phoneNumber: requester.phoneNumber,
+          projectName: requester.ProjectName,
+        },
+      },
+      select: { approvalLevel: true, isResponsibleHr: true },
+    });
+    const isManagerOrSeniorRequester =
+      !requesterAccess?.isResponsibleHr &&
+      (requesterAccess?.approvalLevel ===
+        LeaveApprovalLevel.SENIOR_SPECIALIST ||
+        requesterAccess?.approvalLevel === LeaveApprovalLevel.UNIT_MANAGER);
+    if (approverOverride && !isManagerOrSeniorRequester) return null;
+    if (input.durationType !== "DAILY" && !isManagerOrSeniorRequester) {
+      return null;
+    }
+
+    const hrApprovers = await this.getResponsibleHrApprovers(
+      requester.ProjectName,
+    );
+    const isHrRequester = hrApprovers.some(
+      ({ phoneNumber }) => phoneNumber === requester.phoneNumber,
+    );
+
+    const startDate = getCalendarDate(input.startDate);
+    const endDate = getCalendarDate(input.endDate);
+    if (isManagerOrSeniorRequester && !isHrRequester) {
+      if (endDate < startDate) {
+        throw new AppError(
+          400,
+          "Эхлэх огноо дуусах огнооноос хойш байж болохгүй.",
+        );
+      }
+      if (endDate > addCalendarMonths(startDate, 3)) {
+        throw new AppError(
+          400,
+          "Цалингүй чөлөөний хугацаа 3 сараас хэтэрч болохгүй.",
+        );
+      }
+
+      if (countWorkingDays(startDate, endDate) === 0) {
+        throw new AppError(
+          400,
+          "Чөлөөний хугацаанд ажлын өдөр байх шаардлагатай.",
+        );
+      }
+
+      const selectedHrRecord =
+        hrApprovers.length > 0
+          ? await this.resolveSelectedHr(
+              requester.ProjectName,
+              input.selectedHrPhoneNumber,
+            )
+          : null;
+      if (!selectedHrRecord) {
+        throw new AppError(
+          400,
+          "Тухайн төслийн ХН хариуцагч бүртгэгдээгүй байна.",
+        );
+      }
+
+      const selectedHr = {
+        phoneNumber: selectedHrRecord.phoneNumber,
+        displayName: selectedHrRecord.displayName,
+      };
+      return {
+        stageSequence: [
+          LeaveRequestStage.HR_REVIEW,
+          LeaveRequestStage.FINAL_APPROVER_REVIEW,
+        ],
+        selectedApprover: selectedHr,
+        selectedHr,
+        manager: null,
+        finalApprover: HR_DIRECTOR_FINAL_APPROVER,
+      };
+    }
+
+    if (input.durationType !== "DAILY") return null;
+    if (endDate < startDate || endDate > addCalendarMonths(startDate, 3)) {
+      return null;
+    }
+
+    const workingDays = countWorkingDays(startDate, endDate);
+    if (workingDays === 0 || workingDays > 14) return null;
+
+    if (isHrRequester) {
+      return {
+        stageSequence: [LeaveRequestStage.FINAL_APPROVER_REVIEW],
+        selectedApprover: HR_DIRECTOR_FINAL_APPROVER,
+        selectedHr: null,
+        manager: null,
+        finalApprover: HR_DIRECTOR_FINAL_APPROVER,
+      };
+    }
+
+    const selectedHrRecord =
+      hrApprovers.length > 0
+        ? await this.resolveSelectedHr(
+            requester.ProjectName,
+            input.selectedHrPhoneNumber,
+          )
+        : null;
+    const selectedHr = selectedHrRecord
+      ? {
+          phoneNumber: selectedHrRecord.phoneNumber,
+          displayName: selectedHrRecord.displayName,
+        }
+      : null;
+
+    const isConstructionDepartment = await this.getIsConstructionDepartment(
+      requester.phoneNumber,
+    );
+    if (isConstructionDepartment && requester.ProjectName === ProjectName.UB) {
+      const constructionHr = await this.getAssignedApprover(
+        requester.ProjectName,
+        UB_CONSTRUCTION_HR_PHONE,
+      );
+      const finalApprover = await this.getAssignedApprover(
+        requester.ProjectName,
+        UB_CONSTRUCTION_APPROVER_PHONE,
+      );
+      return {
+        stageSequence: [
+          LeaveRequestStage.HR_REVIEW,
+          LeaveRequestStage.FINAL_APPROVER_REVIEW,
+        ],
+        selectedApprover: finalApprover,
+        selectedHr: constructionHr,
+        manager: null,
+        finalApprover,
+      };
+    }
+
+    if (
+      requester.ProjectName === ProjectName.UB &&
+      UB_HR_DEPARTMENT_PHONES.includes(requester.phoneNumber)
+    ) {
+      const hrApprover = await this.getAssignedApprover(
+        requester.ProjectName,
+        UB_CONSTRUCTION_HR_PHONE,
+      );
+      const finalApprover = await this.getAssignedApprover(
+        requester.ProjectName,
+        UB_HR_DEPARTMENT_APPROVER_PHONE,
+      );
+      return {
+        stageSequence: [
+          LeaveRequestStage.HR_REVIEW,
+          LeaveRequestStage.FINAL_APPROVER_REVIEW,
+        ],
+        selectedApprover: finalApprover,
+        selectedHr: hrApprover,
+        manager: null,
+        finalApprover,
+      };
+    }
+
+    if (
+      requester.ProjectName === ProjectName.UB &&
+      !(await this.hasUbSeniorApprover())
+    ) {
+      const approver = await this.getAssignedApprover(
+        requester.ProjectName,
+        input.selectedApproverPhoneNumber ?? "",
+      );
+      if (!UB_DIRECT_APPROVER_PHONES.includes(approver.phoneNumber)) {
+        throw new AppError(
+          400,
+          "Батлагчаар Bilguun, Anar-Erdene, Bayarmunkh-аас сонгоно уу.",
+        );
+      }
+      const hrApprover = await this.getAssignedApprover(
+        requester.ProjectName,
+        UB_CONSTRUCTION_HR_PHONE,
+      );
+      return {
+        stageSequence: [
+          LeaveRequestStage.HR_REVIEW,
+          LeaveRequestStage.FINAL_APPROVER_REVIEW,
+        ],
+        selectedApprover: approver,
+        selectedHr: hrApprover,
+        manager: null,
+        finalApprover: approver,
+      };
+    }
+
+    if (workingDays <= 3) {
+      const senior = await this.getStageApprover(
+        requester.ProjectName,
+        input.selectedApproverPhoneNumber,
+        LeaveApprovalLevel.SENIOR_SPECIALIST,
+        "Ахлах ажилтан",
+      );
+      const manager = await this.getStageApprover(
+        requester.ProjectName,
+        input.selectedManagerPhoneNumber,
+        LeaveApprovalLevel.UNIT_MANAGER,
+        "Менежер",
+      );
+      if (!selectedHr) {
+        return {
+          stageSequence: [
+            LeaveRequestStage.FIRST_APPROVER_REVIEW,
+            LeaveRequestStage.SECOND_APPROVER_REVIEW,
+          ],
+          selectedApprover: senior,
+          selectedHr: null,
+          manager,
+          finalApprover: manager,
+        };
+      }
+      return {
+        stageSequence: [
+          LeaveRequestStage.FIRST_APPROVER_REVIEW,
+          LeaveRequestStage.SECOND_APPROVER_REVIEW,
+          LeaveRequestStage.HR_REVIEW,
+        ],
+        selectedApprover: senior,
+        selectedHr,
+        manager,
+        finalApprover: selectedHr,
+      };
+    }
+
+    const manager = await this.getStageApprover(
+      requester.ProjectName,
+      input.selectedManagerPhoneNumber,
+      LeaveApprovalLevel.UNIT_MANAGER,
+      "Менежер",
+    );
+
+    if (workingDays <= 7) {
+      if (!selectedHr) {
+        return {
+          stageSequence: [LeaveRequestStage.SECOND_APPROVER_REVIEW],
+          selectedApprover: manager,
+          selectedHr: null,
+          manager,
+          finalApprover: manager,
+        };
+      }
+      return {
+        stageSequence: [
+          LeaveRequestStage.HR_REVIEW,
+          LeaveRequestStage.SECOND_APPROVER_REVIEW,
+        ],
+        selectedApprover: selectedHr,
+        selectedHr,
+        manager,
+        finalApprover: manager,
+      };
+    }
+
+    if (!selectedHr) {
+      return {
+        stageSequence: [
+          LeaveRequestStage.SECOND_APPROVER_REVIEW,
+          LeaveRequestStage.FINAL_APPROVER_REVIEW,
+        ],
+        selectedApprover: manager,
+        selectedHr: null,
+        manager,
+        finalApprover: HR_DIRECTOR_FINAL_APPROVER,
+      };
+    }
+    return {
+      stageSequence: [
+        LeaveRequestStage.HR_REVIEW,
+        LeaveRequestStage.SECOND_APPROVER_REVIEW,
+        LeaveRequestStage.FINAL_APPROVER_REVIEW,
+      ],
+      selectedApprover: selectedHr,
+      selectedHr,
+      manager,
+      finalApprover: HR_DIRECTOR_FINAL_APPROVER,
+    };
+  }
+
+  private async hasUbSeniorApprover(): Promise<boolean> {
+    const count = await prisma.leaveRequestAccess.count({
+      where: {
+        projectName: ProjectName.UB,
+        canApprove: true,
+        approvalLevel: LeaveApprovalLevel.SENIOR_SPECIALIST,
+      },
+    });
+    return count > 0;
+  }
+
+  // Ахлах ажилтан / менежерийг тухайн төслийн батлагчийн түвшинээр нь шалгана.
+  private async getStageApprover(
+    projectName: ProjectName,
+    phoneNumber: string | undefined,
+    approvalLevel: LeaveApprovalLevel,
+    label: string,
+  ): Promise<ResolvedLeaveRequestApprover> {
+    if (!phoneNumber) {
+      throw new AppError(400, `${label} сонгоно уу.`);
+    }
+
+    const access = await prisma.leaveRequestAccess.findUnique({
+      where: {
+        phoneNumber_projectName: { phoneNumber, projectName },
+      },
+      select: {
+        phoneNumber: true,
+        displayName: true,
+        canApprove: true,
+        approvalLevel: true,
+      },
+    });
+    if (!access?.canApprove || access.approvalLevel !== approvalLevel) {
+      throw new AppError(400, `Сонгосон ${label} буруу байна.`);
+    }
+
+    return {
+      phoneNumber: access.phoneNumber,
+      displayName: access.displayName,
+    };
   }
 
   private async getLeaveRequestApproverOverride(
@@ -680,10 +1104,24 @@ export class LeaveRequestsService {
     });
     if (!requester) throw new AppError(404, "Хэрэглэгч олдсонгүй.");
 
-    const approverOverride = await this.getLeaveRequestApproverOverride(
-      requester.phoneNumber,
-    );
-    if (approverOverride) {
+    const [approverOverride, requesterAccess] = await Promise.all([
+      this.getLeaveRequestApproverOverride(requester.phoneNumber),
+      prisma.leaveRequestAccess.findUnique({
+        where: {
+          phoneNumber_projectName: {
+            phoneNumber: requester.phoneNumber,
+            projectName: requester.ProjectName,
+          },
+        },
+        select: { approvalLevel: true, isResponsibleHr: true },
+      }),
+    ]);
+    const requesterIsManagerOrSenior =
+      !requesterAccess?.isResponsibleHr &&
+      (requesterAccess?.approvalLevel ===
+        LeaveApprovalLevel.SENIOR_SPECIALIST ||
+        requesterAccess?.approvalLevel === LeaveApprovalLevel.UNIT_MANAGER);
+    if (approverOverride && !requesterIsManagerOrSenior) {
       const approver = await this.getAssignedApprover(
         requester.ProjectName,
         approverOverride.phoneNumber,
@@ -699,10 +1137,19 @@ export class LeaveRequestsService {
         ],
         hrItems: [],
         requiresHrSelection: false,
+        stagedRouting: false,
+        isHrRequester: false,
+        isConstructionDepartment: false,
+        seniorItems: [],
+        managerItems: [],
+        finalItems: [],
       };
     }
 
-    const [accessApprovers, responsibleHrApprovers] = await Promise.all([
+    const [
+      accessApprovers,
+      responsibleHrApprovers,
+    ] = await Promise.all([
       prisma.leaveRequestAccess.findMany({
         where: {
           projectName: requester.ProjectName,
@@ -728,6 +1175,44 @@ export class LeaveRequestsService {
     }));
     const requiresHrSelection = hrItems.length > 1;
 
+    const toApproverItem = ({
+      phoneNumber,
+      displayName,
+      approvalLevel,
+      isResponsibleHr,
+    }: (typeof accessApprovers)[number]) => ({
+      phoneNumber,
+      displayName,
+      approvalLevel,
+      isResponsibleHr,
+    });
+    const isHrRequester = hrItems.some(
+      ({ phoneNumber }) => phoneNumber === requester.phoneNumber,
+    );
+    const isManagerOrSeniorRequester =
+      !isHrRequester && requesterIsManagerOrSenior;
+    const isUbHrDepartment =
+      requester.ProjectName === ProjectName.UB &&
+      !isHrRequester &&
+      UB_HR_DEPARTMENT_PHONES.includes(requester.phoneNumber);
+    const isConstructionDepartment =
+      requester.ProjectName === ProjectName.UB &&
+      (await this.getIsConstructionDepartment(requester.phoneNumber));
+    const isUbDirectApproval =
+      requester.ProjectName === ProjectName.UB &&
+      !isHrRequester &&
+      !isUbHrDepartment &&
+      !isConstructionDepartment &&
+      !(await this.hasUbSeniorApprover());
+
+    const fixedFinalPhones = isConstructionDepartment
+      ? [UB_CONSTRUCTION_APPROVER_PHONE]
+      : isUbHrDepartment
+        ? [UB_HR_DEPARTMENT_APPROVER_PHONE]
+        : isUbDirectApproval
+          ? UB_DIRECT_APPROVER_PHONES
+          : [];
+
     return {
       items: accessApprovers
         .filter(
@@ -742,6 +1227,31 @@ export class LeaveRequestsService {
         })),
       hrItems,
       requiresHrSelection,
+      stagedRouting: true,
+      isHrRequester,
+      isManagerOrSeniorRequester,
+      isConstructionDepartment,
+      isUbHrDepartment,
+      isUbDirectApproval,
+      seniorItems: accessApprovers
+        .filter(
+          ({ approvalLevel, isResponsibleHr }) =>
+            approvalLevel === LeaveApprovalLevel.SENIOR_SPECIALIST &&
+            !isResponsibleHr,
+        )
+        .map(toApproverItem),
+      managerItems: accessApprovers
+        .filter(
+          ({ approvalLevel, isResponsibleHr }) =>
+            approvalLevel === LeaveApprovalLevel.UNIT_MANAGER &&
+            !isResponsibleHr,
+        )
+        .map(toApproverItem),
+      finalItems: isManagerOrSeniorRequester
+        ? [HR_DIRECTOR_FINAL_APPROVER]
+        : accessApprovers
+            .filter(({ phoneNumber }) => fixedFinalPhones.includes(phoneNumber))
+            .map(toApproverItem),
     };
   }
 
@@ -834,6 +1344,8 @@ export class LeaveRequestsService {
         selectedApproverName: "OT",
       });
     }
+    scopeFilters.push({ managerPhoneNumber: requestingUser.phoneNumber });
+    scopeFilters.push({ finalApproverPhoneNumber: requestingUser.phoneNumber });
 
     if (scopeFilters.length === 0) {
       throw new AppError(
@@ -865,6 +1377,19 @@ export class LeaveRequestsService {
     });
 
     return leaveRequests.map(({ user, ...leaveRequest }) => {
+      if (leaveRequest.currentStage) {
+        const canApprove =
+          leaveRequest.status === "PENDING" &&
+          getStageReviewerPhoneNumber(leaveRequest) ===
+            requestingUser.phoneNumber;
+        return {
+          ...leaveRequest,
+          ...user,
+          canApprove,
+          isFinalStage: getNextStage(leaveRequest) === null,
+        };
+      }
+
       const projectAccess = accessAssignments.find(
         ({ projectName }) => projectName === user.ProjectName,
       );
@@ -884,7 +1409,7 @@ export class LeaveRequestsService {
               leaveRequest.selectedApproverPhoneNumber ===
                 requestingUser.phoneNumber);
 
-      return { ...leaveRequest, ...user, canApprove };
+      return { ...leaveRequest, ...user, canApprove, isFinalStage: true };
     });
   }
 
@@ -910,6 +1435,15 @@ export class LeaveRequestsService {
       include: { user: true },
     });
     if (!leaveRequest) throw new AppError(404, "Чөлөөний хүсэлт олдсонгүй.");
+
+    if (leaveRequest.currentStage) {
+      return this.updateStagedLeaveRequestStatus(
+        reviewer,
+        leaveRequest,
+        status,
+        comment,
+      );
+    }
 
     const access = await prisma.leaveRequestAccess.findUnique({
       where: {
@@ -962,6 +1496,106 @@ export class LeaveRequestsService {
     const updatedLeaveRequest = await prisma.leaveRequest.update({
       where: { id },
       data: { status, reviewedById: reviewerId, reviewedAt: new Date() },
+    });
+
+    const statusLabel = status === "APPROVED" ? "Зөвшөөрөгдлөө" : "Татгалзлаа";
+    const trimmedComment = comment?.trim();
+    await this.notifications.create({
+      userId: updatedLeaveRequest.userId,
+      title: "Чөлөөний хүсэлтийн төлөв шинэчлэгдлээ",
+      message: trimmedComment
+        ? `Таны чөлөөний хүсэлт ${statusLabel}. Шийдвэрийн тайлбар: ${trimmedComment}`
+        : `Таны чөлөөний хүсэлт ${statusLabel}.`,
+      type: "LEAVE_REQUEST",
+      href: "/profile?tab=leave-request",
+    });
+
+    return updatedLeaveRequest;
+  }
+
+  private async updateStagedLeaveRequestStatus(
+    reviewer: { id: string; phoneNumber: string },
+    leaveRequest: {
+      id: string;
+      userId: string;
+      status: LeaveRequestStatus;
+      currentStage: LeaveRequestStage | null;
+      stageSequence: LeaveRequestStage[];
+      startDate: Date;
+      selectedApproverPhoneNumber: string | null;
+      managerPhoneNumber: string | null;
+      selectedHrPhoneNumber: string | null;
+      finalApproverPhoneNumber: string | null;
+    },
+    status: Extract<LeaveRequestStatus, "APPROVED" | "REJECTED">,
+    comment?: string,
+  ) {
+    if (leaveRequest.status !== LeaveRequestStatus.PENDING) {
+      throw new AppError(
+        400,
+        "Чөлөөний хүсэлт аль хэдий нь шийдвэрлэгдсэн байна.",
+      );
+    }
+    if (getStageReviewerPhoneNumber(leaveRequest) !== reviewer.phoneNumber) {
+      throw new AppError(
+        403,
+        "Танд энэ хүсэлтийг шийдвэрлэх эрх байхгүй байна.",
+      );
+    }
+    if (status === "APPROVED" && hasStartDateArrived(leaveRequest.startDate)) {
+      throw new AppError(
+        400,
+        "Чөлөөний эхлэх өдөр болсон тул хүсэлтийг батлах боломжгүй.",
+      );
+    }
+
+    const nextStage = status === "APPROVED" ? getNextStage(leaveRequest) : null;
+    if (nextStage) {
+      const advancedLeaveRequest = await prisma.leaveRequest.update({
+        where: { id: leaveRequest.id },
+        data: {
+          currentStage: nextStage,
+          reviewedById: reviewer.id,
+          reviewedAt: new Date(),
+        },
+      });
+
+      await this.notifications.create({
+        userId: leaveRequest.userId,
+        title: "Чөлөөний хүсэлт дараагийн шатанд шилжлээ",
+        message:
+          "Таны чөлөөний хүсэлтийг урьдчилан зөвшөөрч, дараагийн батлагчид илгээлээ.",
+        type: "LEAVE_REQUEST",
+        href: "/profile?tab=leave-request",
+      });
+
+      const nextReviewerPhoneNumber =
+        getStageReviewerPhoneNumber(advancedLeaveRequest);
+      if (nextReviewerPhoneNumber) {
+        const nextReviewer = await prisma.user.findUnique({
+          where: { phoneNumber: nextReviewerPhoneNumber },
+          select: { id: true, isActive: true },
+        });
+        if (nextReviewer?.isActive) {
+          await this.notifications.create({
+            userId: nextReviewer.id,
+            title: "Шинэ чөлөөний хүсэлт",
+            message: "Чөлөөний хүсэлт таны батлах шатанд ирлээ.",
+            type: "LEAVE_REQUEST",
+            href: "/profile?tab=dashboard",
+          });
+        }
+        await sendSmsToMany(
+          [nextReviewerPhoneNumber],
+          "Чөлөөний хүсэлт таны батлах шатанд ирлээ. Та систем рүү орж дэлгэрэнгүй харна уу",
+        );
+      }
+      return advancedLeaveRequest;
+    }
+
+    const updatedLeaveRequest = await prisma.leaveRequest.update({
+      where: { id: leaveRequest.id },
+      data: { status, reviewedById: reviewer.id, reviewedAt: new Date() },
     });
 
     const statusLabel = status === "APPROVED" ? "Зөвшөөрөгдлөө" : "Татгалзлаа";

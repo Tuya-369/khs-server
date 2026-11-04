@@ -19,10 +19,16 @@ export const createLeaveRequestSchema = z.object({
       durationType: z.enum(["DAILY", "HOURLY"]),
       selectedApproverPhoneNumber: z
         .string()
-        .regex(/^\d{8}$/, "Батлагчийн дугаар буруу байна."),
+        .regex(/^\d{8}$/, "Батлагчийн дугаар буруу байна.")
+        .or(z.literal(""))
+        .default(""),
       selectedHrPhoneNumber: z
         .string()
         .regex(/^\d{8}$/, "ХН ажилтны дугаар буруу байна.")
+        .optional(),
+      selectedManagerPhoneNumber: z
+        .string()
+        .regex(/^\d{8}$/, "Менежерийн дугаар буруу байна.")
         .optional(),
       startDate: dateString,
       endDate: dateString,

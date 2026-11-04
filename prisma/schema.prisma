@@ -76,6 +76,12 @@ enum LeaveApprovalLevel {
   HR_DIRECTOR
   GENERAL_DIRECTOR
 }
+enum LeaveRequestStage {
+  FIRST_APPROVER_REVIEW
+  SECOND_APPROVER_REVIEW
+  HR_REVIEW
+  FINAL_APPROVER_REVIEW
+}
 model User {
   id                   String          @id @default(uuid())
   sapId                String?         @unique
@@ -263,11 +269,17 @@ model LeaveRequest {
   startDate    DateTime
   endDate      DateTime
   reason       String
-  proofImageUrl String
+  proofImageUrl String?
   selectedApproverPhoneNumber String?
   selectedApproverName String?
   selectedHrPhoneNumber String?
   selectedHrName String?
+  stageSequence LeaveRequestStage[] @default([])
+  currentStage LeaveRequestStage?
+  managerPhoneNumber String?
+  managerName String?
+  finalApproverPhoneNumber String?
+  finalApproverName String?
   status       LeaveRequestStatus @default(PENDING)
   reviewedById String?
   reviewedBy   User?              @relation("ReviewedLeaveRequests", fields: [reviewedById], references: [id], onDelete: SetNull)
